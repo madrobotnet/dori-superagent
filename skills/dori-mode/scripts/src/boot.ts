@@ -158,6 +158,7 @@ export const bootCheck = async (deps: BootDeps): Promise<{ exitCode: number; lin
       const report = progress?.lastReport;
       if (report) journals.push(`REPORT ${lane.key} kind=${report.kind} at=${report.at} state=${progress.state} registryStatus=${statusOf(lane)}`);
       else if (progress) journals.push(`NO-REPORT ${lane.key} state=${progress.state} registryStatus=${statusOf(lane)} (journal holds harness activity only)`);
+      else journals.push(`NO-REPORT ${lane.key} registryStatus=${statusOf(lane)} (no journal)`);
     } catch (e) {
       // Any unreadable journal is that lane's error; the other lanes are still checked.
       failed = true;

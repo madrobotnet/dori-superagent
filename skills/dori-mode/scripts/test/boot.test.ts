@@ -245,6 +245,17 @@ test("the launch's activity record is not a report: a lane that never reported r
   expect(result.lines.some((l) => l.startsWith("REPORT quiet"))).toBe(false);
 });
 
+test("a launched lane with no journal at all reads NO-REPORT, never nothing", async () => {
+  // Given a launched lane that has not written reports.jsonl yet.
+  const world = newWorld();
+  const deps = bootDeps(world);
+  await deps.registry.write(launched("silent"));
+  // When boot runs; then the lane is listed as having no journal, and that alone is not a failure.
+  const result = await bootCheck(deps);
+  expect(result.lines).toContain("NO-REPORT silent registryStatus=working (no journal)");
+  expect(result.exitCode).toBe(0);
+});
+
 test("an adopted lane's journal is not read, so a done record there cannot offer its watch for cleanup", async () => {
   // Given an adopted lane (no reportProtocol) with a done record and a persistent watch naming it.
   const world = newWorld();
