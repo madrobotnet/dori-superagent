@@ -164,12 +164,22 @@ export class Checkpoints {
         if (repeated !== undefined) throw new CheckpointError(`remote effect ${repeated} already recorded by step ${entry.step}`);
       }
       const checkpoint: Checkpoint = { key, at, ...JSON.parse(payload(input)) };
+      const created = !existsSync(path);
       const fd = openSync(path, "a", 0o600);
       try {
         writeSync(fd, `${JSON.stringify(checkpoint)}\n`);
         fsyncSync(fd);
       } finally {
         closeSync(fd);
+      }
+      // A new journal's directory entry must be durable too, or a crash could lose the first checkpoint after it was acknowledged.
+      if (created) {
+        const dir = openSync(dirname(path), "r");
+        try {
+          fsyncSync(dir);
+        } finally {
+          closeSync(dir);
+        }
       }
       return { checkpoint, unchanged: false };
     } finally {
