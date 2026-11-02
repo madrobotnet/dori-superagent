@@ -188,7 +188,7 @@ dori は omo と同じやり方で匿名の利用回数を送ります。OTLP/HT
 
 エンドツーエンドテスト 1 個（`test/e2e.test.ts`）は、隔離した名前付きセッションで本物の herdr サーバーを起動し、ワークスペースを作り、lead ペインを登録して、omo の代わりに `test/fixtures/fake-agent.sh` をエージェントにした lane を開始します。このスクリプトは brief を読んで `dori report` と `dori ready` を呼び、テストは `[START]`、`[REPORT]`、`[READY]` が lead ペインに届くことと、`dori done` が lane を閉じることを確認します。PATH に `herdr` がなければスキップされ、`DORI_TELEMETRY=0` で走ります。`bun run typecheck` は `tsc --noEmit` を実行します。
 
-Dori モードには、偽の herdr、git、gh に対する独自のテストが 115 個あります。
+Dori モードには、偽の herdr、git、gh に対する独自のテストが 116 個あります。
 
 ```sh
 cd skills/dori-mode/scripts && bun install && bun test
