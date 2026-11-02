@@ -94,11 +94,12 @@ Real work runs in its own herdr tab, called a lane. The protocol, with the reaso
 | `dori sync [--write]` | rebuild the registry from live panes, report drift |
 | `dori boot` | after a restart or compaction: vanished panes, lane journals, watches left on finished lanes; read-only |
 | `dori report` | a lane records a milestone, blocker, question, halt or done in its `reports.jsonl` and prints the `[REPORT]` line |
+| `dori checkpoint` / `dori checkpoints` | a lane records each completed step and its remote receipts once, and reads them back on resume |
 | `dori verify-pr <owner/repo> <num>` | before a PR is called done: commit emails match the repo's identity, fixes come with a test or a `No test:` reason |
 | `dori claim-done` / `dori object-done` / `dori close` | the done flow |
 | `dori pause` / `dori resume` | the owner said wait: no nudges, goal paused, running turn stopped; and back |
 | `dori watch` | the 5-minute auto-close watcher (run it as a persistent monitor) |
-| `dori freshness` | nudge silent lanes, post their last report to their thread |
+| `dori freshness` | nudge silent lanes, post their last report to their thread; block lanes at their wall, token or cost ceiling; flag hung calls |
 | `dori dead-panes` | report agent panes that stopped |
 | `dori guard` | host load, memory, disk and pane-count alerts |
 | `dori heavy <label> -- <cmd>` | run a heavy command only when a slot is free and load is low |

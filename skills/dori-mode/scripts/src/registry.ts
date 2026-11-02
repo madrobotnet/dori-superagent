@@ -1,5 +1,6 @@
 import { mkdirSync, readdirSync, renameSync } from "node:fs";
 import { join } from "node:path";
+import type { BudgetLimits } from "./supervision.ts";
 
 export const LANE_KEY = /^[a-z0-9][a-z0-9._-]{1,60}$/;
 
@@ -41,6 +42,8 @@ export type Lane = {
   /** The status a paused lane had before it was paused; `resume` restores it. */
   readonly pausedFrom?: LaneStatus;
   readonly reportProtocol?: "jsonl-v1";
+  readonly budget?: BudgetLimits;
+  readonly activityPaths?: readonly string[];
   readonly receipt?: unknown;
 };
 

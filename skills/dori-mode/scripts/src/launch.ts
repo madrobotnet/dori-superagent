@@ -7,6 +7,7 @@ import { LANE_KEY, type Lane } from "./registry.ts";
 import { iso } from "./run.ts";
 import { Reports } from "./reports.ts";
 import { doneSyntaxErrors } from "./signals.ts";
+import type { BudgetLimits } from "./supervision.ts";
 
 export type LaunchInput = {
   readonly key: string;
@@ -16,6 +17,8 @@ export type LaunchInput = {
   readonly thread?: string;
   readonly model?: string;
   readonly cwd?: string;
+  readonly budget?: BudgetLimits;
+  readonly activityPaths?: readonly string[];
 };
 
 export class LaunchError extends Error {}
@@ -27,6 +30,9 @@ export const validateLaunch = async (deps: FlowDeps, input: LaunchInput): Promis
   if (await deps.registry.read(input.key)) throw new LaunchError(`lane ${input.key} is already registered`);
   const errors = doneSyntaxErrors(input.done);
   if (errors.length) throw new LaunchError(`Done line is not checkable: ${errors.join("; ")}`);
+  for (const [name, value] of Object.entries(input.budget ?? {})) {
+    if (value != null && (!Number.isFinite(value) || value < 0)) throw new LaunchError(`invalid ${name} ceiling`);
+  }
 };
 
 // The footer names this CLI by path: a bare `dori` can resolve to the root harness, whose `report` accepts unknown
@@ -46,6 +52,9 @@ export const footer = (lane: Lane, leadPane: string, identities: DoriConfig["rep
     ...Object.entries(identities).map(([repo, identity]) => `  - ${repo}: git -c user.name=${quoteForPane(identity.name)} -c user.email=${quoteForPane(identity.email)} commit ...`),
   ] : []),
   `- Before claiming PR work done, run ${CLI} verify-pr <owner/repo> <number>. A PR with source fix commits must change a test or carry a "No test: <reason>" line in its body; a fix commit without its own test is a warning. Run the printed UI test loop at the reported head before calling those tests stable.`,
+  `- After each completed step: ${CLI} checkpoint ${lane.key} --step <unique-step> --result <result> --evidence <path-or-URL> [--remote-effect <completed-push/merge/deploy-receipt> ...].`,
+  `- On resume, run ${CLI} checkpoints ${lane.key} before doing work. Never repeat a recorded remote side effect. If a crash may have happened between the remote action and checkpoint, read the live remote receipt first and use the service's idempotency key; a local journal cannot make that remote action atomic.`,
+  `- Supervision ceilings: ${JSON.stringify(lane.budget ?? {})}. A breach marks blocked and alerts; it never kills the agent. Report a blocker and wait for the lead's decision rather than overriding the ceiling.`,
   `- When done: ${CLI} claim-done ${lane.key} --evidence "<merge SHA, closed issue, version>". See references/done-protocol.md.`,
   "",
 ].join("\n");
@@ -63,7 +72,12 @@ export const launchLane = async (deps: FlowDeps, input: LaunchInput): Promise<{ 
   const cwd = input.cwd ?? deps.config.defaultCwd;
   const briefFile = Bun.file(input.brief);
   if (!(await briefFile.exists())) throw new LaunchError(`brief not found: ${input.brief}`);
-  const draft: Lane = { key: input.key, title: input.title, thread: input.thread ?? "none", brief: input.brief, done: input.done, cwd, model, openedAt: iso(deps.clock), reportProtocol: "jsonl-v1" };
+  const draft: Lane = {
+    key: input.key, title: input.title, thread: input.thread ?? "none", brief: input.brief, done: input.done, cwd, model,
+    openedAt: iso(deps.clock), reportProtocol: "jsonl-v1",
+    budget: { ...deps.config.supervision.defaults, ...deps.config.supervision.lanes?.[input.key], ...input.budget },
+    activityPaths: input.activityPaths ?? [],
+  };
   await Bun.write(input.brief, `${(await briefFile.text()).replace(/\s*$/, "")}\n${footer(draft, deps.config.leadPane, deps.config.repoIdentities)}`);
   const created = await deps.run(["herdr", "tab", "create", ...(deps.config.laneWorkspace ? ["--workspace", deps.config.laneWorkspace] : []), "--cwd", cwd, "--label", input.key, "--no-focus"]);
   if (created.code !== 0) throw new LaunchError(`herdr tab create failed: ${created.err || created.out}`);

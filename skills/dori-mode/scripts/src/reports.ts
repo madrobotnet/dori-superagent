@@ -115,7 +115,7 @@ export class Reports {
     return report;
   }
 
-  observe(key: string, screen: string, now: number, staleAfterMs: number): Progress | null {
+  observe(key: string, screen: string, now: number, staleAfterMs: number, resumeOnWorking = true): Progress | null {
     const progress = this.read(key);
     if (!progress || (progress.state !== "running" && progress.state !== "stalled")) return progress;
     const visible = Bun.stripANSI(screen);
@@ -124,13 +124,13 @@ export class Reports {
       for (const match of visible.matchAll(pattern)) at = match.index;
       return at;
     };
-    const workingAt = lastAt(/^\s*[^\w\n]*Working\b/gim);
+    const workingAt = lastAt(/^\s*[^\w\n]*(?:Working|Running)\b/gim);
     const working = workingAt >= 0;
     // A failure counts only when no Working line follows it: an old error left on screen above a recovered lane is history.
     const failed = lastAt(/compaction (?:failed|failure|error)|failed to compact|error (?:during|in) compaction|auto-?compaction failed/gi) > workingAt;
     const idle = /^\s*[❯>]\s*$/m.test(visible);
     const stale = now - Date.parse(progress.lastReport?.at ?? progress.lastEvent.at) >= staleAfterMs;
-    const state = failed || (idle && !working && stale) ? "stalled" : working ? "running" : progress.state;
+    const state = failed || (idle && !working && stale) ? "stalled" : working && resumeOnWorking ? "running" : progress.state;
     if (state === progress.state) return progress;
     const event: Activity = {
       type: "activity", key, at: new Date(now).toISOString(), state,

@@ -4,6 +4,7 @@ import { checkPausedLane } from "./pause.ts";
 import { readScreen, sendVerified } from "./panes.ts";
 import { type Lane, statusOf } from "./registry.ts";
 import { type Progress, ReportError, reportLine, Reports } from "./reports.ts";
+import { Supervision } from "./supervision.ts";
 
 export const lastReportLine = (screen: string, key: string): string | null => {
   const grammar = new RegExp(`\\[REPORT\\] ${key.replace(/[.]/g, "\\.")} \\| (milestone|blocker|question|halted|done) \\| (?!<what)\\S`);
@@ -66,7 +67,7 @@ export const anchoredReportLine = (screen: string, key: string): string | null =
   );
 
 export type SweepAct = {
-  readonly kind: "nudged" | "posted" | "no-report" | "pending-report" | "stale-report" | "working-while-paused" | "stalled" | "journal-error";
+  readonly kind: "nudged" | "posted" | "no-report" | "pending-report" | "stale-report" | "working-while-paused" | "stalled" | "journal-error" | "blocked" | "warning";
   readonly lane: string;
   readonly detail: string;
 };
@@ -77,6 +78,7 @@ export const freshnessTick = async (deps: FlowDeps, home: string): Promise<Sweep
   const acts: SweepAct[] = [];
   const now = deps.clock.now();
   const reports = new Reports(deps.config.stateDir);
+  const supervision = new Supervision({ ...deps, stateDir: deps.config.stateDir, reports }, deps.config.supervision);
   for (const lane of await deps.registry.open()) {
     if (statusOf(lane) === "paused") {
       const checked = await checkPausedLane(deps, lane);
@@ -91,10 +93,17 @@ export const freshnessTick = async (deps: FlowDeps, home: string): Promise<Sweep
     // Only launched lanes report through the journal; an adopted lane keeps the screen path even if a record exists.
     let previous: Progress | null = null;
     let progress: Progress | null = null;
+    let supervisedAlerts = 0;
     if (lane.reportProtocol === "jsonl-v1") {
       try {
         previous = reports.read(lane.key);
-        progress = previous ? reports.observe(lane.key, await readScreen(deps.run, lane.pane), now, deps.config.nudgeAfterMin * 60_000) : null;
+        const screen = await readScreen(deps.run, lane.pane);
+        const supervised = await supervision.sweep(lane, screen);
+        for (const detail of supervised.alerts) {
+          acts.push({ kind: supervised.state === "blocked" ? "blocked" : supervised.state === "stalled" ? "stalled" : "warning", lane: lane.key, detail });
+        }
+        supervisedAlerts = supervised.alerts.length;
+        progress = reports.observe(lane.key, screen, now, deps.config.nudgeAfterMin * 60_000, !supervised.hung);
       } catch (error) {
         // One corrupt journal skips its own lane, printed once per error, and never ends the sweep for the others.
         if (!(error instanceof ReportError)) throw error;
@@ -106,7 +115,7 @@ export const freshnessTick = async (deps: FlowDeps, home: string): Promise<Sweep
         continue;
       }
     }
-    if (progress?.state === "stalled" && previous?.state !== "stalled") {
+    if (progress?.state === "stalled" && previous?.state !== "stalled" && !supervisedAlerts) {
       acts.push({ kind: "stalled", lane: lane.key, detail: progress.lastEvent.text });
     }
     if (progress?.state === "stalled") continue;

@@ -1,6 +1,7 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
 
+import type { SupervisionOptions } from "./supervision.ts";
 import type { CommitIdentity } from "./verify-pr.ts";
 
 export type ArgvTemplate = readonly string[];
@@ -40,6 +41,7 @@ export type DoriConfig = {
   readonly hooks: Hooks;
   /** Expected Git author and committer per lowercase `owner/repo`, for `verify-pr` and the lane footer. */
   readonly repoIdentities: Readonly<Record<string, CommitIdentity>>;
+  readonly supervision: SupervisionOptions;
 };
 
 export const defaultConfig = (home = homedir()): DoriConfig => ({
@@ -62,6 +64,7 @@ export const defaultConfig = (home = homedir()): DoriConfig => ({
   guard: { loadAlert: 150, loadOk: 80, memFreeMinPct: 20, diskFreeMinGb: 50, panesMax: 20 },
   hooks: {},
   repoIdentities: {},
+  supervision: { hungAfterMinutes: 20, staleAfterMinutes: 20, defaults: { wallMinutes: 240, tokens: null, costUsd: null } },
 });
 
 export const configPath = (): string => process.env.DORI_CONFIG ?? join(homedir(), ".dori", "config.json");
@@ -82,7 +85,22 @@ export const loadConfig = async (path = configPath(), home = homedir()): Promise
   const base = defaultConfig(home);
   const file = Bun.file(path);
   const raw = (await file.exists()) ? ((await file.json()) as Partial<DoriConfig>) : {};
-  const merged: DoriConfig = { ...base, ...raw, guard: { ...base.guard, ...raw.guard }, hooks: { ...base.hooks, ...raw.hooks }, repoIdentities: repoIdentities(raw.repoIdentities) };
+  const merged: DoriConfig = {
+    ...base, ...raw, guard: { ...base.guard, ...raw.guard }, hooks: { ...base.hooks, ...raw.hooks }, repoIdentities: repoIdentities(raw.repoIdentities),
+    supervision: { ...base.supervision, ...raw.supervision, defaults: { ...base.supervision.defaults, ...raw.supervision?.defaults } },
+  };
+  for (const [name, value] of Object.entries({
+    hungAfterMinutes: merged.supervision.hungAfterMinutes,
+    staleAfterMinutes: merged.supervision.staleAfterMinutes,
+    ...merged.supervision.defaults,
+  })) {
+    if (value != null && (typeof value !== "number" || !Number.isFinite(value) || value < 0)) throw new Error(`invalid supervision ${name}: expected a nonnegative number or null`);
+  }
+  for (const [key, budget] of Object.entries(merged.supervision.lanes ?? {})) {
+    for (const [name, value] of Object.entries(budget)) {
+      if (value != null && (typeof value !== "number" || !Number.isFinite(value) || value < 0)) throw new Error(`invalid supervision lane ${key} ${name}`);
+    }
+  }
   return {
     ...merged,
     stateDir: expandHome(process.env.DORI_STATE_DIR ?? merged.stateDir, home),

@@ -1,5 +1,5 @@
 export type Ran = { readonly code: number; readonly out: string; readonly err: string };
-export type RunOptions = { readonly cwd?: string; readonly timeoutMs?: number };
+export type RunOptions = { readonly cwd?: string; readonly timeoutMs?: number; readonly preserveOutput?: boolean };
 export type Runner = (argv: readonly string[], opts?: RunOptions) => Promise<Ran>;
 
 export const run: Runner = async (argv, opts = {}) => {
@@ -10,7 +10,7 @@ export const run: Runner = async (argv, opts = {}) => {
     return { code: 127, out: "", err: e instanceof Error ? e.message : String(e) };
   }
   const [out, err, code] = await Promise.all([new Response(p.stdout as ReadableStream).text(), new Response(p.stderr as ReadableStream).text(), p.exited]);
-  return { code: p.signalCode ? 124 : code, out: out.trim(), err: (p.signalCode ? `killed by ${p.signalCode} (timeout)` : err).trim() };
+  return { code: p.signalCode ? 124 : code, out: opts.preserveOutput ? out : out.trim(), err: (p.signalCode ? `killed by ${p.signalCode} (timeout)` : err).trim() };
 };
 
 export type Clock = { readonly now: () => number; readonly sleep: (ms: number) => Promise<void> };
