@@ -63,11 +63,13 @@ export const freshnessTick = async (deps: FlowDeps, home: string): Promise<Sweep
     if (progress?.state === "stalled" && previous?.state !== "stalled") {
       acts.push({ kind: "stalled", lane: lane.key, detail: progress.lastEvent.text });
     }
-    if (progress && progress.state !== "running") continue;
+    if (progress?.state === "stalled") continue;
+    // A blocker, halted or done lane is not nudged, but its report still reaches the thread.
+    const running = !progress || progress.state === "running";
     const heard = Math.max(lastHeard(lane), progress?.lastReport ? Date.parse(progress.lastReport.at) : 0);
     const silentMin = Math.round((now - heard) / 60_000);
     let current = lane;
-    if (silentMin >= deps.config.nudgeAfterMin && (current.lastNudgeAt ?? 0) < heard) {
+    if (running && silentMin >= deps.config.nudgeAfterMin && (current.lastNudgeAt ?? 0) < heard) {
       const delivery = await sendVerified(deps.run, deps.clock, lane.pane, `[LEAD] your work thread has had no update for ${silentMin} min. Post a 1-2 sentence progress line (done since last, next) and keep its status true.`);
       current = { ...current, lastNudgeAt: now };
       await deps.registry.write(current);

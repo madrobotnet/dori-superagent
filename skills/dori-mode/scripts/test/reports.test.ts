@@ -141,6 +141,20 @@ test("a stalled structured lane alerts once even without a thread hook", async (
   expect(world.calls.some((call) => call[2] === "send-text")).toBe(false);
 });
 
+test.each(["blocker", "halted", "done"] as const)("a %s report still reaches the thread, but the lane is not nudged", async (kind) => {
+  // Given a lane that declared %s and then stayed silent past both thresholds.
+  const world = newWorld();
+  const deps = depsFor(world, fakeClock(T0 + 30 * MIN), state.dir, {
+    hooks: { threadReply: ["notify", "{thread}", "{text}"] },
+  });
+  await deps.registry.write(lane);
+  reports.report(lane.key, kind, "needs the owner", T0);
+  // When freshness runs; then the report is posted and nothing is sent to the pane.
+  expect((await freshnessTick(deps, "/home/test")).map((act) => act.kind)).toEqual(["posted"]);
+  expect(world.calls.find((call) => call[0] === "notify")?.[2]).toContain("needs the owner");
+  expect(world.calls.some((call) => call[2] === "send-text")).toBe(false);
+});
+
 test("an adopted lane ignores a journal record and keeps the screen path", async () => {
   // Given an adopted lane (no reportProtocol) with a blocker record and 30 silent minutes.
   const world = newWorld();
