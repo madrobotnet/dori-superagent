@@ -237,6 +237,26 @@ test("an unreadable journal of any kind is that lane's error; the other lanes ar
   expect(result.exitCode).toBe(1);
 });
 
+test("a manifest with a malformed monitor entry is named as unreadable and the check still finishes", async () => {
+  // Given one manifest whose monitors list holds null and a string, and a valid manifest in another session.
+  const world = newWorld();
+  const deps = bootDeps(world);
+  await deps.registry.write(lane("closed", "closed"));
+  const bad = join(deps.sessionsDir, "a", "extensions", "terminal");
+  const good = join(deps.sessionsDir, "b", "extensions", "terminal");
+  mkdirSync(bad, { recursive: true });
+  mkdirSync(good, { recursive: true });
+  writeFileSync(join(bad, "null.json"), JSON.stringify({ version: 1, sessionId: "owner", monitors: [null] }));
+  writeFileSync(join(bad, "string.json"), JSON.stringify({ version: 1, sessionId: "owner", monitors: ["mon_X"] }));
+  writeFileSync(join(good, "owner.json"), JSON.stringify(manifest([{ description: "closed reports", monitorId: "mon_GOOD" }]).data));
+  // When boot runs; then both bad files are named, the good watch is still listed, and the run is incomplete.
+  const result = await bootCheck(deps);
+  expect(result.lines).toContain(`MONITORS unreadable ${join(bad, "null.json")}`);
+  expect(result.lines).toContain(`MONITORS unreadable ${join(bad, "string.json")}`);
+  expect(result.lines).toContain('STOP in the owner session only: kill_bash({"bash_id":"mon_GOOD"})');
+  expect(result.exitCode).toBe(1);
+});
+
 test("one unreadable metadata file is named and the other sessions' cleanup is still listed, path quoted", async () => {
   // Given a corrupt manifest in one session and a valid one, in a directory with a space, in another.
   const world = newWorld();

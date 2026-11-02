@@ -104,6 +104,8 @@ export const readMonitorManifests = (sessionsDir: string, extraDirs: readonly st
       try {
         const data = JSON.parse(readFileSync(path, "utf8")) as Manifest["data"];
         if (data.version !== 1 || !Array.isArray(data.monitors) || typeof data.sessionId !== "string") throw new Error("invalid monitor metadata");
+        // A null or non-object entry makes the whole file unreadable here, never a crash in the cleanup pass.
+        if (!data.monitors.every((m: unknown) => typeof m === "object" && m !== null && !Array.isArray(m))) throw new Error("invalid monitor entry");
         manifests.push({ path, data });
       } catch {
         errors.push(path);
