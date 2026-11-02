@@ -27,7 +27,8 @@ const recordedRunner = (p: PrSnapshot): { run: Runner; calls: { argv: readonly s
   const calls: { argv: readonly string[]; opts?: RunOptions }[] = [];
   const run: Runner = async (argv, opts) => {
     calls.push({ argv, opts });
-    expect(argv.slice(0, 5)).toEqual(["gh", "api", "--method", "GET", argv[4]!]);
+    // The endpoint is checked by the dispatch below; any other argument fails here.
+    expect(argv).toEqual(["gh", "api", "--method", "GET", argv[4]!]);
     const endpoint = argv[4]!;
     if (endpoint === `repos/${p.repo}/pulls/${p.number}`) return json({ body: p.body, head: { sha: p.head }, commits: p.commits.length });
     if (endpoint.includes(`/pulls/${p.number}/commits?`)) {
