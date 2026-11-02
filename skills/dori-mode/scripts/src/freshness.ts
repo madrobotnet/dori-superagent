@@ -21,16 +21,24 @@ export const scrubForThread = (line: string, home: string): string =>
     .replace(/`/g, "'")
     .trim();
 
-// Only a line that starts with [REPORT] is a report. Instructions, prompts and argv arrays that quote the grammar
-// mid-line are dropped before parsing, so an example is never posted as the lane's progress. A line whose whole
-// report text is one unfilled placeholder ($name, ${name}, {name}, %s, <what>) is a template, quoted or not (#29).
-// The match is anchored to the [REPORT] key | kind | text structure, so 'deployed api | %s' stays a real report.
+// A report is a line that starts with [REPORT], or a [REPORT] that is a whole quoted element of an argv array, the
+// shape lanes are told to send it in: ["herdr", "pane", "run", "lead:p1", "[REPORT] key | kind | text"]. Instructions
+// and prompts that quote the grammar mid-sentence are dropped before parsing, so an example is never posted as the
+// lane's progress. A report whose whole text is one unfilled placeholder ($name, ${name}, {name}, %s, <what>) is a
+// template, quoted or not (#29). The match is anchored to the [REPORT] key | kind | text structure, so
+// 'deployed api | %s' stays a real report.
 const placeholderOnly = /^\s*\[REPORT\][^|]*\|[^|]*\|\s*["'`]?(\$\{?[A-Za-z_]\w*\}?|\{[A-Za-z_][\w.]*\}|%[sdif]|<[^>]+>)["'`)\s]*$/;
+const argvElement = /[[,]\s*(["'])(\[REPORT\](?:(?!\1).)*)\1\s*[,\]]/;
+const reportCandidate = (l: string): string | null => {
+  if (!l.includes("[REPORT]")) return l;
+  const report = /^\s*\[REPORT\]/.test(l) ? l : (argvElement.exec(l)?.[2] ?? null);
+  return report !== null && !placeholderOnly.test(report) ? report : null;
+};
 export const anchoredReportLine = (screen: string, key: string): string | null =>
   lastReportLine(
     screen
       .split("\n")
-      .filter((l) => !l.includes("[REPORT]") || (/^\s*\[REPORT\]/.test(l) && !placeholderOnly.test(l)))
+      .flatMap((l) => reportCandidate(l) ?? [])
       .join("\n"),
     key,
   );

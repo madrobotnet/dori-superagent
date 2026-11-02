@@ -13,7 +13,6 @@ test.each([
   'Send a truthful [REPORT] docs-research | milestone | current completed axes and remaining checks',
   'Steering: [REPORT] docs-research | milestone | current completed axes',
   '❯ [REPORT] docs-research | milestone | current completed axes',
-  '["herdr", "pane", "run", "lead:p1", "[REPORT] docs-research | milestone | current completed axes"]',
   ' "[REPORT] docs-research | milestone | current completed axes"',
   ' │ "[REPORT] docs-research | milestone | current completed axes"',
 ])("rejects instruction or quoted report row %#", (screen) => {
@@ -101,6 +100,24 @@ test("template shapes from #29 are not reports; the emitted report still wins", 
   expect(anchoredReportLine("[REPORT] demo-lane | done | %s", "demo-lane")).toBeNull();
   expect(anchoredReportLine("[REPORT] demo-lane | milestone | set $HOME in docs", "demo-lane")).toBe("[REPORT] demo-lane | milestone | set $HOME in docs");
   expect(anchoredReportLine("[REPORT] demo-lane | done | 100% of checks green", "demo-lane")).toBe("[REPORT] demo-lane | done | 100% of checks green");
+});
+
+test("a [REPORT] that is a whole quoted argv element is a report; prose quoting the grammar and templates are not", () => {
+  // Given the argv row a lane's own pane shows after sending its report the documented way.
+  const argv = '["herdr", "pane", "run", "lead:p1", "[REPORT] demo-lane | milestone | tests pass, PR opened"]';
+  // When it is parsed alone, or in single quotes inside a call; then the element is the report.
+  expect(anchoredReportLine(argv, "demo-lane")).toBe("[REPORT] demo-lane | milestone | tests pass, PR opened");
+  expect(anchoredReportLine("Bun.spawn(['herdr', 'pane', 'run', 'lead:p1', '[REPORT] demo-lane | done | merged as abc123'])", "demo-lane")).toBe("[REPORT] demo-lane | done | merged as abc123");
+  // Then prose that quotes the grammar mid-sentence, and #29 templates inside argv, are still dropped.
+  for (const row of [
+    'Send "[REPORT] demo-lane | milestone | tests pass" to the lead pane',
+    'echo "[REPORT] demo-lane | milestone | tests pass"',
+    '["herdr", "pane", "run", "lead:p1", "[REPORT] demo-lane | milestone | $message"]',
+    '["herdr", "pane", "run", "lead:p1", "[REPORT] demo-lane | milestone | %s"]',
+    '["herdr", "pane", "run", "lead:p1", "[REPORT] demo-lane | milestone | ${text}"]',
+  ]) expect(anchoredReportLine(row, "demo-lane")).toBeNull();
+  // And the argv report stays the latest one when an instruction follows it.
+  expect(anchoredReportLine(`${argv}\nSend "[REPORT] demo-lane | milestone | next step" to the lead`, "demo-lane")).toBe("[REPORT] demo-lane | milestone | tests pass, PR opened");
 });
 
 test("a quoted placeholder is a template, but a placeholder after a later pipe is real report text", () => {
