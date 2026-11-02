@@ -155,6 +155,29 @@ test.each(["blocker", "halted", "done"] as const)("a %s report still reaches the
   expect(world.calls.some((call) => call[2] === "send-text")).toBe(false);
 });
 
+test("a lane that reports every 10 minutes still gets its latest report posted, at most once per postAfterMin", async () => {
+  // Given a lane whose reports keep the nudge clock fresh while its thread stays quiet.
+  const world = newWorld();
+  const clock = fakeClock(T0 + 21 * MIN);
+  const deps = depsFor(world, clock, state.dir, { hooks: { threadReply: ["notify", "{thread}", "{text}"] } });
+  await deps.registry.write(lane);
+  world.screen = "Working (1m)\n❯ ";
+  reports.report(lane.key, "milestone", "step one", T0 + 5 * MIN);
+  reports.report(lane.key, "milestone", "step two", T0 + 15 * MIN);
+  const posts = () => world.calls.filter((call) => call[0] === "notify").map((call) => call[2]);
+  // When freshness runs 21 minutes after launch; then the latest report is posted.
+  expect((await freshnessTick(deps, "/home/test")).map((act) => act.kind)).toEqual(["posted"]);
+  expect(posts().at(-1)).toContain("step two");
+  // And a newer report waits until the thread has been quiet for postAfterMin again.
+  reports.report(lane.key, "milestone", "step three", T0 + 30 * MIN);
+  clock.at = T0 + 31 * MIN;
+  expect(await freshnessTick(deps, "/home/test")).toEqual([]);
+  clock.at = T0 + 41 * MIN;
+  expect((await freshnessTick(deps, "/home/test")).map((act) => act.kind)).toEqual(["posted"]);
+  expect(posts()).toHaveLength(2);
+  expect(posts().at(-1)).toContain("step three");
+});
+
 test("an adopted lane ignores a journal record and keeps the screen path", async () => {
   // Given an adopted lane (no reportProtocol) with a blocker record and 30 silent minutes.
   const world = newWorld();

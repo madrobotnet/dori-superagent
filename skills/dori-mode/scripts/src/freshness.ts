@@ -76,9 +76,12 @@ export const freshnessTick = async (deps: FlowDeps, home: string): Promise<Sweep
       acts.push({ kind: "nudged", lane: lane.key, detail: `${silentMin} min silent, delivery ${delivery}` });
     }
     const hook = deps.config.hooks.threadReply;
-    if (silentMin >= deps.config.postAfterMin && hook && lane.thread !== "none" && (current.lastAutoReplyAt ?? 0) < heard) {
-      // A journal report is durable, so it posts at once; a screen-scraped line counts only once it is still there on
-      // the next tick (the two reads are a full loop interval apart).
+    // The post waits for the thread to be quiet, not the lane: a report resets the nudge clock only, so a lane that
+    // reports often still gets its latest report posted, at most once per postAfterMin.
+    const threadQuietMin = Math.round((now - Math.max(lastHeard(lane), lane.lastAutoReplyAt ?? 0)) / 60_000);
+    if (threadQuietMin >= deps.config.postAfterMin && hook && lane.thread !== "none" && (current.lastAutoReplyAt ?? 0) < heard) {
+      // A journal report is durable, so it skips the two-tick hold; a screen-scraped line counts only once it is still
+      // there on the next tick (the two reads are a full loop interval apart).
       const fromJournal = progress?.lastReport ? reportLine(progress.lastReport) : null;
       const report = fromJournal ?? (lane.reportProtocol === "jsonl-v1" ? null : anchoredReportLine(await readScreen(deps.run, lane.pane, 200), lane.key));
       const seenBefore = current.lastSeenReport;
