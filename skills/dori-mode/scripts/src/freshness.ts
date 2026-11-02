@@ -95,7 +95,7 @@ export const freshnessTick = async (deps: FlowDeps, home: string): Promise<Sweep
     // Only launched lanes report through the journal; an adopted lane keeps the screen path even if a record exists.
     let previous: Progress | null = null;
     let progress: Progress | null = null;
-    let supervisedAlerts = 0;
+    let supervisedHung = false;
     // The lane as last written here, so a later write keeps the recorded supervision error.
     let latest: Lane = lane;
     if (lane.reportProtocol === "jsonl-v1") {
@@ -122,7 +122,8 @@ export const freshnessTick = async (deps: FlowDeps, home: string): Promise<Sweep
         for (const detail of supervised?.alerts ?? []) {
           acts.push({ kind: supervised?.state === "blocked" ? "blocked" : supervised?.state === "stalled" ? "stalled" : "warning", lane: lane.key, detail });
         }
-        supervisedAlerts = supervised?.alerts.length ?? 0;
+        // Only supervision's own hung result replaces the stall line below; a usage warning is not a stall.
+        supervisedHung = supervised?.hung ?? false;
         progress = reports.observe(lane.key, screen, now, deps.config.nudgeAfterMin * 60_000, !supervised?.hung);
       } catch (error) {
         // One corrupt journal skips its own lane, printed once per error, and never ends the sweep for the others.
@@ -135,7 +136,7 @@ export const freshnessTick = async (deps: FlowDeps, home: string): Promise<Sweep
         continue;
       }
     }
-    if (progress?.state === "stalled" && previous?.state !== "stalled" && !supervisedAlerts) {
+    if (progress?.state === "stalled" && previous?.state !== "stalled" && !supervisedHung) {
       acts.push({ kind: "stalled", lane: lane.key, detail: progress.lastEvent.text });
     }
     if (progress?.state === "stalled") continue;

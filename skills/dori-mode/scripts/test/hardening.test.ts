@@ -74,6 +74,20 @@ test("a launched lane with no report journal is not supervised by freshness", as
   } finally { state.done(); }
 });
 
+test("a usage warning does not hide the idle-prompt stall of the same lane", async () => {
+  const state = withState();
+  try {
+    const world = newWorld();
+    const deps = depsFor(world, fakeClock(T0 + 20 * MIN), state.dir, { nudgeAfterMin: 15, supervision: { defaults: { tokens: 1000 }, gitActivity: false } });
+    await deps.registry.write(lane);
+    new Reports(state.dir).report(lane.key, "milestone", "started", T0);
+    world.screen = "all done here\n❯ ";
+    const acts = await freshnessTick(deps, "/home/test");
+    expect(acts.map((a) => a.kind)).toEqual(["warning", "stalled"]);
+    expect(acts[0]?.detail).toBe("tokens ceiling cannot be checked: usage unavailable");
+  } finally { state.done(); }
+});
+
 test("Runner preserves leading status columns and NUL delimiters when requested", async () => {
   // Given git-like machine output; when passed through the actual runner.
   const result = await run([process.execPath, "-e", 'process.stdout.write(" M source.ts\\u0000")'], { preserveOutput: true });
