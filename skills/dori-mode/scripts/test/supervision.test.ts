@@ -113,11 +113,12 @@ describe("supervision", () => {
       f.clock.at += 60_000;
       const result = await f.supervisor.sweep(lane, "Working 1m");
       expect(result.state).toBe("blocked");
-      expect(result.alerts).toHaveLength(3);
+      expect(result.usage).toEqual({ key: lane.key, at: new Date(f.clock.at).toISOString(), tokens: 10, costUsd: 1 });
+      expect(result.alerts).toEqual(["wallMinutes ceiling reached (1)", "tokens ceiling reached (10)", "costUsd ceiling reached (1)"]);
       f.setUsage('{"tokens":11,"costUsd":2}');
       f.clock.at += 60_000;
       expect((await f.supervisor.sweep(lane, "Working 2m")).alerts).toEqual([]);
-      expect(f.calls.every((args) => args[0] === "usage")).toBe(true);
+      expect(f.calls).toEqual([["usage", lane.key], ["usage", lane.key]]);
       expect(new Reports(f.dir).read(lane.key)?.lastReport?.kind).toBe("blocker");
     } finally { f.done(); }
   });
