@@ -43,11 +43,12 @@ export const reconcilePanes = (lanes: readonly Lane[], panes: readonly Pane[]): 
   };
 };
 
-// An exact lane or pane reference, never a prefix such as "api" in "api-release".
+// An exact lane or pane reference, never a prefix such as "api" in "api-release" or "api" in "api.v2". A colon or a
+// period next to the name is punctuation ("lane:api-release", "api-release.") unless the period joins another name.
 const mentions = (text: string, value: string | undefined): boolean => {
   if (!value) return false;
   const escaped = value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return new RegExp(`(^|[^a-zA-Z0-9_.:-])${escaped}($|[^a-zA-Z0-9_.:-])`).test(text);
+  return new RegExp(`(?<![a-zA-Z0-9_-])(?<![a-zA-Z0-9_-]\\.)${escaped}(?![a-zA-Z0-9_-])(?!\\.[a-zA-Z0-9_-])`).test(text);
 };
 
 export const monitorCleanup = (lanes: readonly BootLane[], manifests: readonly Manifest[]): Cleanup[] => {

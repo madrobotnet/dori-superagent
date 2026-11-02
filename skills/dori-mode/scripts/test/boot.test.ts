@@ -72,6 +72,20 @@ test("shared, prefix-matched, unknown and foreign-owner watches are preserved", 
   expect(result).toEqual([]);
 });
 
+test("an active lane named after a colon or before a period or colon still keeps a shared watch", () => {
+  // Given a closed lane, an active one, and a closed key that appears only inside a dotted name.
+  const lanes = [lane("closed", "closed"), lane("api-release"), lane("v2", "closed")];
+  const result = monitorCleanup(lanes, [manifest([
+    { description: "closed reports; lane:api-release", monitorId: "mon_COLON" },
+    { description: "closed reports, then api-release.", monitorId: "mon_PERIOD" },
+    { description: "closed and api-release: both", monitorId: "mon_TRAILCOLON" },
+    { description: "watch api.v2 only", monitorId: "mon_DOTTED" },
+    { description: "closed reports", monitorId: "mon_CLOSED" },
+  ])]);
+  // Then only the watch naming nothing but the closed lane is offered.
+  expect(result.map((m) => m.monitorId)).toEqual(["mon_CLOSED"]);
+});
+
 test("a done journal qualifies a lane for cleanup on its own; halted does not", () => {
   // Given two working lanes whose journals say done and halted.
   const lanes = [{ ...lane("done-report"), reportState: "done" as const }, { ...lane("halted-report"), reportState: "halted" as const }];
