@@ -141,6 +141,17 @@ test("a stalled structured lane alerts once even without a thread hook", async (
   expect(world.calls.some((call) => call[2] === "send-text")).toBe(false);
 });
 
+test("an adopted lane ignores a journal record and keeps the screen path", async () => {
+  // Given an adopted lane (no reportProtocol) with a blocker record and 30 silent minutes.
+  const world = newWorld();
+  const deps = depsFor(world, fakeClock(T0 + 30 * MIN), state.dir);
+  const { reportProtocol: _, ...adopted } = lane;
+  await deps.registry.write(adopted);
+  reports.report(lane.key, "blocker", "waiting on review", T0);
+  // When freshness runs; then the journal does not hold back the nudge.
+  expect((await freshnessTick(deps, "/home/test")).map((act) => act.kind)).toEqual(["nudged"]);
+});
+
 test("structured lanes never fall back to unrelated pane report text", async () => {
   // Given a new-protocol lane with no journal and report-like screen output.
   const world = newWorld();

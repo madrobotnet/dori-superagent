@@ -57,7 +57,8 @@ export const freshnessTick = async (deps: FlowDeps, home: string): Promise<Sweep
       continue;
     }
     if (statusOf(lane) !== "working" || !lane.pane) continue;
-    const previous = reports.read(lane.key);
+    // Only launched lanes report through the journal; an adopted lane keeps the screen path even if a record exists.
+    const previous = lane.reportProtocol === "jsonl-v1" ? reports.read(lane.key) : null;
     const progress = previous ? reports.observe(lane.key, await readScreen(deps.run, lane.pane), now, deps.config.nudgeAfterMin * 60_000) : null;
     if (progress?.state === "stalled" && previous?.state !== "stalled") {
       acts.push({ kind: "stalled", lane: lane.key, detail: progress.lastEvent.text });
