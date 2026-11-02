@@ -116,8 +116,11 @@ export class Supervision {
           const name = entry.slice(3);
           const path = resolve(lane.cwd, name);
           const rel = relative(resolve(lane.cwd), path);
-          if (!isAbsolute(rel) && rel !== ".." && !rel.startsWith("../") && !rel.split("/").includes("node_modules")) paths.add(path);
-          changes.push(entry);
+          // Dependency churn and paths outside the lane's cwd are not the lane's progress.
+          if (!isAbsolute(rel) && rel !== ".." && !rel.startsWith("../") && !rel.split("/").includes("node_modules")) {
+            paths.add(path);
+            changes.push(entry);
+          }
           if (entry[0] === "R" || entry[0] === "C" || entry[1] === "R" || entry[1] === "C") index++;
         }
       }

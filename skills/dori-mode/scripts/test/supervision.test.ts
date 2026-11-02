@@ -115,6 +115,18 @@ describe("supervision", () => {
     } finally { f.done(); }
   });
 
+  test("changes under node_modules or outside the lane's cwd are not activity", async () => {
+    const f = fixture();
+    try {
+      const activeLane = { ...lane, cwd: f.dir };
+      f.setDirty(" M node_modules/a/index.js\0");
+      await f.supervisor.sweep(activeLane, "Running 21m");
+      f.clock.at += 20 * 60_000;
+      f.setDirty(" M node_modules/b/index.js\0 M ../elsewhere.ts\0");
+      expect((await f.supervisor.sweep(activeLane, "Running 41m")).state).toBe("stalled");
+    } finally { f.done(); }
+  });
+
   test("budgets block without killing, support per-lane overrides and deduplicate alerts", async () => {
     const f = fixture({ usageArgv: ["usage", "{key}"], defaults: { wallMinutes: 100, tokens: 1000, costUsd: 10 }, lanes: { "demo-lane": { wallMinutes: 1, tokens: 10, costUsd: 1 } } });
     try {
