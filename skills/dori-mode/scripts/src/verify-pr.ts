@@ -34,7 +34,7 @@ const isTest = (path: string): boolean =>
   !/(?:^|\/)(?:fixtures?|__fixtures__|__snapshots__|helpers?|fakes?|mocks?)\//i.test(path)
   && (/(?:^|\/)[^/]+\.(?:test|spec)\.(?:[cm]?[jt]sx?|py|go|rs|rb|sh|java|kt|swift)$/i.test(path)
   || /(?:^|\/)(?:test_[^/]+\.py|[^/]+_test\.(?:go|py))$/i.test(path)
-  || (/(?:^|\/)(?:tests?|__tests__)\//i.test(path) && /\.(?:[cm]?[jt]sx?|py|go|rs|rb|sh)$/i.test(path)
+  || (/(?:^|\/)(?:tests?|__tests__)\//i.test(path) && /\.(?:[cm]?[jt]sx?|py|go|rs|rb|sh|java|kt|swift)$/i.test(path)
     && !/(?:^|\/)(?:(?:setup|conftest|test-utils)[./]|(?:fixtures?|helpers?|fakes?|mocks?)\.[^/]*$)/i.test(path)));
 
 const isSource = (path: string): boolean =>

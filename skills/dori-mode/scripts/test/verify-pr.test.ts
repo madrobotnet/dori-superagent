@@ -105,6 +105,12 @@ test("fixtures, source maps, and test helpers do not stand in for changed execut
   }
 });
 
+test("Java, Kotlin and Swift files in a test directory count as tests", () => {
+  for (const filename of ["src/test/java/com/acme/DialogTest.java", "app/src/test/kotlin/DialogTest.kt", "Tests/AppTests/DialogTests.swift"]) {
+    expect(checkPr(snapshot([commit([source, { filename, status: "added" }])])).ok).toBe(true);
+  }
+});
+
 test("a real test whose name is helpers, mocks, fakes or fixture still counts; their directories do not", () => {
   for (const filename of ["test/helpers.test.ts", "src/mocks.test.ts", "test/fakes.spec.js", "tests/fixture_test.py", "test/setup.test.ts"]) {
     expect(checkPr(snapshot([commit([source, { filename, status: "added" }])])).ok).toBe(true);
