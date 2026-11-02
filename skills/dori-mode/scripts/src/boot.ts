@@ -4,6 +4,7 @@ import { join } from "node:path";
 import type { FlowDeps } from "./done-flow.ts";
 import { shellQuote } from "./launch.ts";
 import { listPanes, type Pane } from "./panes.ts";
+import type { Slack } from "./messenger/slack.ts";
 import { type Lane, statusOf } from "./registry.ts";
 import { type ProgressState, Reports } from "./reports.ts";
 
@@ -30,6 +31,15 @@ export type BootDeps = Pick<FlowDeps, "run" | "registry" | "config"> & {
 };
 
 const finished = (lane: BootLane): boolean => ["closed", "verified-done"].includes(statusOf(lane)) || lane.reportState === "done";
+
+/** The boot Slack step: auth.test through the given client, or null (skipped) when no token is configured. */
+export const slackAuthCheck = (slack: Pick<Slack, "call"> | null): SlackCheck => async () => {
+  if (!slack) return null;
+  const auth = await slack.call("auth.test", {});
+  // A success without both ids proves nothing about the account, as in `inbound`.
+  if (typeof auth.user_id !== "string" || !auth.user_id || typeof auth.team_id !== "string" || !auth.team_id) throw new Error("auth.test returned no user_id or team_id");
+  return { userId: auth.user_id, teamId: auth.team_id };
+};
 
 export const reconcilePanes = (lanes: readonly Lane[], panes: readonly Pane[]): { lanes: { key: string; status: string; pane: string | null; paneState: PaneState }[]; unregistered: string[] } => {
   const live = new Set(panes.map((pane) => pane.pane_id));

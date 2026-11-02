@@ -2,7 +2,7 @@
 import { dirname, join } from "node:path";
 import { parseArgs } from "node:util";
 
-import { bootCheck } from "./boot.ts";
+import { bootCheck, slackAuthCheck } from "./boot.ts";
 import { loadConfig } from "./config.ts";
 import { deadPaneTick, newDeadPaneState } from "./dead-panes.ts";
 import { claimDone, closeLane, type FlowDeps, objectDone, watchTick } from "./done-flow.ts";
@@ -131,11 +131,7 @@ try {
       const r = await bootCheck({
         ...deps,
         reports: new Reports(config.stateDir),
-        slack: async () => {
-          if (!slack) return null;
-          const auth = await slack.call("auth.test", {});
-          return { userId: String(auth.user_id), teamId: String(auth.team_id) };
-        },
+        slack: slackAuthCheck(slack),
         monitorDirs: sessionDirs.flatMap((dir) => (dir ? [join(dir, "extensions", "terminal")] : [])),
       });
       for (const line of r.lines) console.log(line);

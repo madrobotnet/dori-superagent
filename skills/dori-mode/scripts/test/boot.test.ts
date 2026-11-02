@@ -2,7 +2,8 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { bootCheck, type Manifest, type Monitor, monitorCleanup, readMonitorManifests, reconcilePanes } from "../src/boot.ts";
+import { bootCheck, type Manifest, type Monitor, monitorCleanup, readMonitorManifests, reconcilePanes, slackAuthCheck } from "../src/boot.ts";
+import { Slack } from "../src/messenger/slack.ts";
 import type { Lane, LaneStatus } from "../src/registry.ts";
 import { Reports } from "../src/reports.ts";
 import { depsFor, fakeClock, newWorld, withState, type World } from "./fakes.ts";
@@ -217,6 +218,26 @@ test("Slack is optional, and a failed check never prints the provider error", as
   expect(failed.lines[0]).toBe("SLACK auth failed");
   expect(failed.exitCode).toBe(1);
   expect(failed.lines.join("\n")).not.toContain("FIXTURE_TOKEN");
+});
+
+test("the Slack step reads auth.test through the client and fails when it returns no user or team id", async () => {
+  // Given a Slack client whose auth.test succeeds with both ids, then with the team id missing.
+  const slackWith = (body: Record<string, unknown>) => {
+    const calls: string[] = [];
+    const http = async (req: { url: string }) => { calls.push(req.url); return { status: 200, headers: {}, body: JSON.stringify(body) }; };
+    return { slack: new Slack(http, fakeClock(T0), { token: "xoxp-FIXTURE" }, "https://slack.test/api"), calls };
+  };
+  const ok = slackWith({ ok: true, user_id: "U_FIXTURE", team_id: "T_FIXTURE" });
+  const partial = slackWith({ ok: true, user_id: "U_FIXTURE" });
+  // When boot runs with each; then the full one authenticates through auth.test and the partial one fails.
+  const world = newWorld();
+  const good = await bootCheck({ ...bootDeps(world), slack: slackAuthCheck(ok.slack) });
+  const bad = await bootCheck({ ...bootDeps(world), slack: slackAuthCheck(partial.slack) });
+  expect(ok.calls).toEqual(["https://slack.test/api/auth.test"]);
+  expect(good.lines).toContain("SLACK authenticated user=U_FIXTURE team=T_FIXTURE (auth.test only; inbox delivery unverified)");
+  expect(bad.lines).toContain("SLACK auth failed");
+  expect(bad.exitCode).toBe(1);
+  expect(await slackAuthCheck(null)()).toBeNull();
 });
 
 test("a corrupt journal is reported for its lane and does not stop the check", async () => {
