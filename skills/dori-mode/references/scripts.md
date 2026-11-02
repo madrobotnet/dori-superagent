@@ -80,7 +80,7 @@ Run by the lead after a restart or a compaction, before it trusts what it rememb
 
 Exit 0 ends with `BOOT checked`. A lane file that cannot be read or parsed, or a lanes path that cannot be listed, is `REGISTRY unreadable <path>`; the other lanes are still checked. Any input that could not be read (Slack, the registry, panes, a journal, metadata) is printed and gives `BOOT incomplete`, exit 1.
 
-### `dori checkpoint <key> --step ID --result TEXT --evidence PATH [--remote-effect RECEIPT ...]` / `dori checkpoints <key>`
+### `dori checkpoint <key> --step ID --result TEXT --evidence PATH [--remote-effect RECEIPT]...` / `dori checkpoints <key>`
 Run by a lane after each completed step, and on resume before doing work. Each step is one line in `<stateDir>/lanes/<key>/checkpoints.jsonl` with its result, evidence and the receipts of remote effects it completed (a push, a merge, a deploy). Recording the same step again with the same data returns the original, unchanged; different data for a recorded step is refused. Writes take an exclusive lock and fsync; a lock left by a crash fails closed, so remove it only after checking no writer is left.
 
 A lane reads its checkpoints before resuming and never repeats a recorded remote effect. A crash between a remote action and its checkpoint is not covered by the journal: read the live remote state first, and use the service's idempotency key where it has one.

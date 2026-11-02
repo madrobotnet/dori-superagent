@@ -37,7 +37,7 @@ const USAGE = `dori <command> [options]
   boot                                 read-only check after a restart: Slack auth, vanished panes, journals, stale watches
   report <key> --kind milestone|blocker|question|halted|done --text TEXT
                                        append a durable progress report and print its [REPORT] line
-  checkpoint <key> --step ID --result TEXT --evidence PATH [--remote-effect RECEIPT ...]
+  checkpoint <key> --step ID --result TEXT --evidence PATH [--remote-effect RECEIPT]...
                                        record a completed step once; a conflicting rewrite is refused
   checkpoints <key>                    read completed steps before resuming remote work
   verify-pr <owner/repo> <num> [--loop N] [--cwd DIR]
@@ -166,6 +166,9 @@ try {
     }
     case "checkpoint": {
       const target = await lane(key ?? die("checkpoint needs a lane key"));
+      // parseArgs takes one value per flag; a second bare receipt would otherwise be dropped and its effect repeated later.
+      const stray = flags.positionals.slice(1);
+      if (stray.length) die(`checkpoint: unexpected argument ${stray[0]}; give each receipt its own --remote-effect`);
       const result = new Checkpoints(config.stateDir).write(target.key, {
         step: need("step"), result: need("result"), evidence: [need("evidence")], remoteEffects: strings("remote-effect"),
       }, realClock.now());

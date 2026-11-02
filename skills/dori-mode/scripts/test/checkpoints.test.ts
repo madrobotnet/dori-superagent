@@ -3,6 +3,7 @@ import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } fr
 import { join } from "node:path";
 
 import { CheckpointError, Checkpoints, LOCK_STALE_MS, type CheckpointInput } from "../src/checkpoints.ts";
+import { Registry } from "../src/registry.ts";
 import { withState } from "./fakes.ts";
 
 // A separate process takes the journal lock through the real code, says LOCKED, and holds it until stdin gets a line.
@@ -87,6 +88,26 @@ describe("checkpoints", () => {
       const { checkpoint } = journal.write("demo-lane", input, 1000);
       writeFileSync(journal.path("demo-lane"), `${JSON.stringify({ ...checkpoint, at: 1000 })}\n`);
       expect(() => journal.read("demo-lane")).toThrow("invalid key, timestamp, or duplicate step");
+    } finally { state.done(); }
+  });
+
+  test("dori checkpoint takes one receipt per --remote-effect and refuses a stray argument instead of dropping it", async () => {
+    const state = withState();
+    try {
+      await new Registry(state.dir).write({ key: "demo-lane", title: "demo", thread: "none", brief: "/b.md", done: "merged acme/app#1", openedAt: new Date().toISOString() });
+      const cli = async (...args: string[]) => {
+        const proc = Bun.spawn([process.execPath, join(import.meta.dir, "..", "src", "cli.ts"), "checkpoint", "demo-lane", "--result", "ok", "--evidence", "log", ...args], {
+          env: { ...process.env, DORI_CONFIG: join(state.dir, "none.json"), DORI_STATE_DIR: state.dir }, stdout: "pipe", stderr: "pipe",
+        });
+        return { code: await proc.exited, err: await new Response(proc.stderr).text() };
+      };
+      const journal = new Checkpoints(state.dir);
+      const refused = await cli("--step", "push", "--remote-effect", "push:a", "push:b");
+      expect(refused.code).not.toBe(0);
+      expect(refused.err).toContain("unexpected argument push:b");
+      expect(journal.read("demo-lane")).toEqual([]);
+      expect((await cli("--step", "push", "--remote-effect", "push:a", "--remote-effect", "push:b")).code).toBe(0);
+      expect(journal.read("demo-lane").map((c) => c.remoteEffects)).toEqual([["push:a", "push:b"]]);
     } finally { state.done(); }
   });
 
