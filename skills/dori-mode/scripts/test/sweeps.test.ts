@@ -1,12 +1,13 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { mkdirSync, utimesSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { deadPaneTick, newDeadPaneState } from "../src/dead-panes.ts";
 import { freshnessTick, lastReportLine } from "../src/freshness.ts";
 import { acquireSlot, releaseSlot } from "../src/heavy-slot.ts";
 import { guardTick } from "../src/host-guard.ts";
-import { adoptLane, footer, launchLane, LaunchError } from "../src/launch.ts";
+import { adoptLane, cliCommand, footer, launchLane, LaunchError, shellQuote } from "../src/launch.ts";
 import type { Lane } from "../src/registry.ts";
 import { resolveSession } from "../src/session-id.ts";
 import { depsFor, fakeClock, newWorld, sent, withState, type World } from "./fakes.ts";
@@ -254,4 +255,18 @@ test("a [REPORT] template with an unfilled placeholder is source, not a report: 
   expect(lastReportLine('echo "[REPORT] demo-lane | done | ${message}"', "demo-lane")).toBeNull();
   expect(lastReportLine("[REPORT] demo-lane | done | PR #12 merged", "demo-lane")).toBe("[REPORT] demo-lane | done | PR #12 merged");
   expect(lastReportLine("[REPORT] demo-lane | milestone | added getUser({id}) and ${HOME} docs", "demo-lane")).toBe("[REPORT] demo-lane | milestone | added getUser({id}) and ${HOME} docs");
+});
+
+test("the footer CLI command survives a skill path with a space or a quote", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "dori skill's dir "));
+  try {
+    const cli = join(dir, "cli.ts");
+    writeFileSync(cli, 'console.log("CLI_OK " + process.argv.slice(2).join(" "));\n');
+    expect(shellQuote("/plain/path/cli.ts")).toBe("/plain/path/cli.ts");
+    const command = cliCommand(cli);
+    const proc = Bun.spawn(["bash", "-c", `${command} report path-lane --kind milestone`], { stdout: "pipe", stderr: "pipe" });
+    expect((await new Response(proc.stdout).text()).trim()).toBe("CLI_OK report path-lane --kind milestone");
+    expect(await proc.exited).toBe(0);
+    expect(footer({ ...working, key: "path-lane" }, "lead:p1")).toContain(cliCommand());
+  } finally { rmSync(dir, { recursive: true, force: true }); }
 });

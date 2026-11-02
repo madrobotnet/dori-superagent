@@ -31,7 +31,9 @@ export const validateLaunch = async (deps: FlowDeps, input: LaunchInput): Promis
 
 // The footer names this CLI by path: a bare `dori` can resolve to the root harness, whose `report` accepts unknown
 // flags and writes no journal, so a jsonl-v1 lane would read NO-REPORT for its whole life.
-const CLI = `bun ${fileURLToPath(new URL("./cli.ts", import.meta.url))}`;
+export const shellQuote = (s: string): string => (/^[\w@%+=:,./-]+$/.test(s) ? s : `'${s.replace(/'/g, "'\\''")}'`);
+export const cliCommand = (path: string = fileURLToPath(new URL("./cli.ts", import.meta.url))): string => `bun ${shellQuote(path)}`;
+const CLI = cliCommand();
 
 export const footer = (lane: Lane, leadPane: string): string => [
   "",
