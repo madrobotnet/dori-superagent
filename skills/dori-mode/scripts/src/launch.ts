@@ -75,7 +75,11 @@ export const launchLane = async (deps: FlowDeps, input: LaunchInput): Promise<{ 
   const draft: Lane = {
     key: input.key, title: input.title, thread: input.thread ?? "none", brief: input.brief, done: input.done, cwd, model,
     openedAt: iso(deps.clock), reportProtocol: "jsonl-v1",
-    budget: { ...deps.config.supervision.defaults, ...deps.config.supervision.lanes?.[input.key], ...input.budget },
+    budget: {
+      ...deps.config.supervision.defaults, ...deps.config.supervision.lanes?.[input.key],
+      // An undefined field is absent, so it keeps the configured ceiling; only null turns one off.
+      ...Object.fromEntries(Object.entries(input.budget ?? {}).filter(([, value]) => value !== undefined)),
+    },
     activityPaths: input.activityPaths ?? [],
   };
   await Bun.write(input.brief, `${(await briefFile.text()).replace(/\s*$/, "")}\n${footer(draft, deps.config.leadPane, deps.config.repoIdentities)}`);

@@ -93,6 +93,23 @@ test("launch persists default and per-lane ceilings with explicit override prece
   } finally { state.done(); }
 });
 
+test("a launch budget field passed as undefined keeps the configured ceiling; only null turns it off", async () => {
+  const state = withState();
+  try {
+    const brief = join(state.dir, "brief.md");
+    writeFileSync(brief, "Do the fixture work.");
+    const deps = depsFor(newWorld(), fakeClock(T0), state.dir, { supervision: { defaults: { wallMinutes: 240, tokens: 1000, costUsd: 5 } } });
+    const original = deps.run;
+    const result = await launchLane({ ...deps, run: async (argv, opts) =>
+      argv[0] === "herdr" && argv[1] === "tab" && argv[2] === "create"
+        ? { code: 0, out: JSON.stringify({ result: { root_pane: { pane_id: "qa:p1" }, tab_id: "qa:t1" } }), err: "" }
+        : original(argv, opts),
+    }, { key: lane.key, title: "QA", brief, done: "merged acme/app#1", budget: { tokens: undefined, costUsd: null } });
+    expect(result.lane.budget).toEqual({ wallMinutes: 240, tokens: 1000, costUsd: null });
+    expect((await deps.registry.read(lane.key))?.budget).toEqual({ wallMinutes: 240, tokens: 1000, costUsd: null });
+  } finally { state.done(); }
+});
+
 test("config rejects invalid ceilings and retains defaults when only one is overridden", async () => {
   // Given a concrete configuration boundary.
   const state = withState();
