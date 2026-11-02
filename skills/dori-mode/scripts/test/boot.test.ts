@@ -333,7 +333,7 @@ test("an adopted lane's journal is not read, so a done record there cannot offer
   // When boot runs; then the journal is ignored like freshness ignores it, and the watch is kept.
   const result = await bootCheck(deps);
   expect(result.lines.some((l) => /^(NO-)?REPORT adopted/.test(l))).toBe(false);
-  expect(result.lines).toContain("MONITORS cleanupCandidates=0 (from metadata; liveness unverified)");
+  expect(result.lines).toContain("MONITORS cleanupCandidates=0 deliveryPaused=0 expired=0 (from metadata; liveness unverified)");
   expect(result.exitCode).toBe(0);
 });
 
@@ -371,6 +371,33 @@ test("a manifest with a malformed monitor entry is named as unreadable and the c
   expect(result.lines).toContain(`MONITORS unreadable ${join(bad, "string.json")}`);
   expect(result.lines).toContain('STOP in the owner session only: kill_bash({"bash_id":"mon_GOOD"})');
   expect(result.exitCode).toBe(1);
+});
+
+test("expired and delivery-paused watches are listed apart from live ones, and an expired one gets no stop call", async () => {
+  // Given a closed lane with a live, a delivery-paused and an expired persistent watch.
+  const world = newWorld();
+  const deps = bootDeps(world);
+  await deps.registry.write(lane("closed", "closed"));
+  const terminal = join(deps.sessionsDir, "lead", "extensions", "terminal");
+  mkdirSync(terminal, { recursive: true });
+  writeFileSync(join(terminal, "owner.json"), JSON.stringify(manifest([
+    { command: "dori watch closed", monitorId: "mon_EXPIRED", expiresAt: T0 - 1 },
+    { command: "dori watch closed", monitorId: "mon_PAUSED", expiresAt: T0 + 60_000, deliveryPaused: true },
+    { command: "dori watch closed", monitorId: "mon_LIVE", expiresAt: T0 + 60_000 },
+  ]).data));
+  // When boot runs.
+  const result = await bootCheck(deps);
+  const watchLines = result.lines.filter((l) => /^(MONITORS cleanup|CLEANUP|STOP|EXPIRED)/.test(l));
+  const owner = `ownerSession=owner metadata=${join(terminal, "owner.json")}`;
+  // Then live comes first, the paused one is flagged, and the expired one is listed without a stop call.
+  expect(watchLines).toEqual([
+    "MONITORS cleanupCandidates=2 deliveryPaused=1 expired=1 (from metadata; liveness unverified)",
+    `CLEANUP closed match=closed:command:key ${owner}`,
+    'STOP in the owner session only: kill_bash({"bash_id":"mon_LIVE"})',
+    `CLEANUP closed match=closed:command:key ${owner} deliveryPaused=true`,
+    'STOP in the owner session only: kill_bash({"bash_id":"mon_PAUSED"})',
+    `EXPIRED closed match=closed:command:key ${owner} expiresAt=${new Date(T0 - 1).toISOString()}; nothing to stop`,
+  ]);
 });
 
 test("one unreadable metadata file is named and the other sessions' cleanup is still listed, path quoted", async () => {

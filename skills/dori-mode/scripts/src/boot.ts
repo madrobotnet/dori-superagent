@@ -14,6 +14,9 @@ export type Monitor = {
   readonly sessionId?: string;
   readonly persistent?: boolean;
   readonly suspended?: boolean;
+  /** Epoch ms after which the runtime ends the watch on its own. */
+  readonly expiresAt?: number;
+  readonly deliveryPaused?: boolean;
   readonly description?: string;
   readonly command?: string;
   readonly path?: string;
@@ -21,9 +24,9 @@ export type Monitor = {
 };
 export type Manifest = { readonly path: string; readonly data: { readonly version: number; readonly sessionId: string; readonly monitors: readonly Monitor[] } };
 export type BootLane = Lane & { readonly reportState?: ProgressState };
-export type Cleanup = { readonly monitorId: string; readonly sessionId: string; readonly metadata: string; readonly lanes: readonly string[]; readonly match: readonly string[]; readonly suspended: boolean; readonly stop: string };
+export type Cleanup = { readonly monitorId: string; readonly sessionId: string; readonly metadata: string; readonly lanes: readonly string[]; readonly match: readonly string[]; readonly suspended: boolean; readonly deliveryPaused: boolean; readonly expiresAt?: number; readonly stop: string };
 export type SlackCheck = () => Promise<{ readonly userId: string; readonly teamId: string } | null>;
-export type BootDeps = Pick<FlowDeps, "run" | "registry" | "config"> & {
+export type BootDeps = Pick<FlowDeps, "run" | "registry" | "config" | "clock"> & {
   readonly reports: Reports;
   /** null when no Slack token is configured; boot then skips the check. */
   readonly slack: SlackCheck;
@@ -95,7 +98,9 @@ export const monitorCleanup = (lanes: readonly BootLane[], manifests: readonly M
       const monitorId = monitor.monitorId ?? "";
       cleanup.push({
         monitorId, sessionId: data.sessionId, metadata: path, lanes: tied.map(({ lane }) => lane.key), match: tied.map(({ match }) => match),
-        suspended: Boolean(monitor.suspended), stop: `kill_bash(${JSON.stringify({ bash_id: monitorId })})`,
+        suspended: Boolean(monitor.suspended), deliveryPaused: monitor.deliveryPaused === true,
+        ...(typeof monitor.expiresAt === "number" ? { expiresAt: monitor.expiresAt } : {}),
+        stop: `kill_bash(${JSON.stringify({ bash_id: monitorId })})`,
       });
     }
   }
@@ -214,10 +219,19 @@ export const bootCheck = async (deps: BootDeps): Promise<{ exitCode: number; lin
     lines.push(`MONITORS unreadable ${shellQuote(path)}`);
   }
   const cleanup = monitorCleanup(lanes, manifests);
-  lines.push(`MONITORS cleanupCandidates=${cleanup.length} (from metadata; liveness unverified)`);
-  for (const item of cleanup) {
-    lines.push(`CLEANUP ${item.lanes.join(",")} match=${item.match.join(",")} ownerSession=${item.sessionId} metadata=${shellQuote(item.metadata)}${item.suspended ? " suspended=true" : ""}`);
+  // Live watches first, then delivery-paused ones (still running, so still stopped); an expired watch has ended on its
+  // own and gets no stop call.
+  const now = deps.clock.now();
+  const expired = cleanup.filter((item) => item.expiresAt !== undefined && item.expiresAt <= now);
+  const running = cleanup.filter((item) => !expired.includes(item));
+  const ordered = [...running.filter((item) => !item.deliveryPaused), ...running.filter((item) => item.deliveryPaused)];
+  lines.push(`MONITORS cleanupCandidates=${running.length} deliveryPaused=${running.filter((item) => item.deliveryPaused).length} expired=${expired.length} (from metadata; liveness unverified)`);
+  for (const item of ordered) {
+    lines.push(`CLEANUP ${item.lanes.join(",")} match=${item.match.join(",")} ownerSession=${item.sessionId} metadata=${shellQuote(item.metadata)}${item.suspended ? " suspended=true" : ""}${item.deliveryPaused ? " deliveryPaused=true" : ""}`);
     lines.push(`STOP in the owner session only: ${item.stop}`);
+  }
+  for (const item of expired) {
+    lines.push(`EXPIRED ${item.lanes.join(",")} match=${item.match.join(",")} ownerSession=${item.sessionId} metadata=${shellQuote(item.metadata)} expiresAt=${new Date(item.expiresAt ?? 0).toISOString()}; nothing to stop`);
   }
   // The network step runs last, after every local check, and gives up at a short deadline.
   const deadlineMs = deps.slackDeadlineMs ?? 10_000;
