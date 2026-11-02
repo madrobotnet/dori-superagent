@@ -68,11 +68,21 @@ export const configPath = (): string => process.env.DORI_CONFIG ?? join(homedir(
 
 export const expandHome = (path: string, home = homedir()): string => (path === "~" ? home : path.startsWith("~/") ? join(home, path.slice(2)) : path);
 
+const isIdentity = (value: unknown): value is CommitIdentity => {
+  const v = value as { name?: unknown; email?: unknown } | null;
+  return typeof v === "object" && v !== null && typeof v.name === "string" && !!v.name.trim() && typeof v.email === "string" && !!v.email.trim();
+};
+
+// The file is untrusted JSON: keep only well-formed identities, so a bad entry reads as an unconfigured repo.
+const repoIdentities = (value: unknown): Record<string, CommitIdentity> =>
+  typeof value !== "object" || value === null || Array.isArray(value) ? {}
+    : Object.fromEntries(Object.entries(value).flatMap(([repo, identity]) => (isIdentity(identity) ? [[repo.toLowerCase(), identity]] : [])));
+
 export const loadConfig = async (path = configPath(), home = homedir()): Promise<DoriConfig> => {
   const base = defaultConfig(home);
   const file = Bun.file(path);
   const raw = (await file.exists()) ? ((await file.json()) as Partial<DoriConfig>) : {};
-  const merged: DoriConfig = { ...base, ...raw, guard: { ...base.guard, ...raw.guard }, hooks: { ...base.hooks, ...raw.hooks }, repoIdentities: Object.fromEntries(Object.entries(raw.repoIdentities ?? {}).map(([repo, identity]) => [repo.toLowerCase(), identity])) };
+  const merged: DoriConfig = { ...base, ...raw, guard: { ...base.guard, ...raw.guard }, hooks: { ...base.hooks, ...raw.hooks }, repoIdentities: repoIdentities(raw.repoIdentities) };
   return {
     ...merged,
     stateDir: expandHome(process.env.DORI_STATE_DIR ?? merged.stateDir, home),
