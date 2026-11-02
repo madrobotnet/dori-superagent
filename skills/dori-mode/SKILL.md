@@ -91,7 +91,7 @@ Real work runs in its own herdr tab, called a lane. The protocol, with the reaso
 |---|---|
 | `dori launch` / `dori adopt` | open a lane in a new tab, or register one already running |
 | `dori sync [--write]` | rebuild the registry from live panes, report drift |
-| `dori report` | a lane records a milestone, blocker, halt or done in its `reports.jsonl` and prints the `[REPORT]` line |
+| `dori report` | a lane records a milestone, blocker, question, halt or done in its `reports.jsonl` and prints the `[REPORT]` line |
 | `dori claim-done` / `dori object-done` / `dori close` | the done flow |
 | `dori pause` / `dori resume` | the owner said wait: no nudges, goal paused, running turn stopped; and back |
 | `dori watch` | the 5-minute auto-close watcher (run it as a persistent monitor) |

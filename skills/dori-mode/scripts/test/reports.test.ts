@@ -180,7 +180,7 @@ test("a stalled structured lane alerts once even without a thread hook", async (
   expect(world.calls.some((call) => call[2] === "send-text")).toBe(false);
 });
 
-test.each(["blocker", "halted", "done"] as const)("a %s report still reaches the thread, but the lane is not nudged", async (kind) => {
+test.each(["blocker", "halted", "done", "question"] as const)("a %s report still reaches the thread, but the lane is not nudged", async (kind) => {
   // Given a lane that declared %s and then stayed silent past both thresholds.
   const world = newWorld();
   const deps = depsFor(world, fakeClock(T0 + 30 * MIN), state.dir, {

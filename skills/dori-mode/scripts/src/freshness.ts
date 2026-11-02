@@ -6,7 +6,7 @@ import { type Lane, statusOf } from "./registry.ts";
 import { type Progress, ReportError, reportLine, Reports } from "./reports.ts";
 
 export const lastReportLine = (screen: string, key: string): string | null => {
-  const grammar = new RegExp(`\\[REPORT\\] ${key.replace(/[.]/g, "\\.")} \\| (milestone|blocker|question|done) \\| (?!<what)\\S`);
+  const grammar = new RegExp(`\\[REPORT\\] ${key.replace(/[.]/g, "\\.")} \\| (milestone|blocker|question|halted|done) \\| (?!<what)\\S`);
   const template = (l: string) => /["'`]\[REPORT\]/.test(l) && /\$?\{[A-Za-z_][\w.]*\}/.test(l);
   const hits = screen.split("\n").flatMap((l) => (grammar.test(l) && !template(l) ? [l.slice(l.indexOf("[REPORT]"))] : []));
   return hits.at(-1)?.replace(/["'\])\s,]+$/, "") ?? null;
@@ -88,7 +88,7 @@ export const freshnessTick = async (deps: FlowDeps, home: string): Promise<Sweep
       acts.push({ kind: "stalled", lane: lane.key, detail: progress.lastEvent.text });
     }
     if (progress?.state === "stalled") continue;
-    // A blocker, halted or done lane is not nudged, but its report still reaches the thread.
+    // A blocker, question, halted or done lane is not nudged, but its report still reaches the thread.
     const running = !progress || progress.state === "running";
     const heard = Math.max(lastHeard(lane), progress?.lastReport ? Date.parse(progress.lastReport.at) : 0);
     const silentMin = Math.round((now - heard) / 60_000);

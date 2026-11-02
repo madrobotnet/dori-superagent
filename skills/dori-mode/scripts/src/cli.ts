@@ -29,7 +29,7 @@ const USAGE = `dori <command> [options]
   launch <key> --title T --brief FILE --done "merged o/r#N; closed o/r#M" [--thread REF] [--model M] [--cwd DIR]
   adopt  <key> --pane ID --title T --brief FILE --done "..." [--thread REF]
   sync   [--write]                     registry vs live panes; read-only unless --write
-  report <key> --kind milestone|blocker|halted|done --text TEXT
+  report <key> --kind milestone|blocker|question|halted|done --text TEXT
                                        append a durable progress report and print its [REPORT] line
   claim-done [<key>] --evidence TEXT  key defaults to the lane registered for $HERDR_PANE_ID
   object-done <key> --reason TEXT [--reason TEXT ...]
@@ -99,7 +99,7 @@ try {
       const kind = need("kind");
       if (isReportKind(kind)) {
         console.log(reportLine(new Reports(config.stateDir).report(target.key, kind, need("text"), realClock.now())));
-      } else die("--kind must be milestone, blocker, halted or done");
+      } else die("--kind must be milestone, blocker, question, halted or done");
       break;
     }
     case "launch": {

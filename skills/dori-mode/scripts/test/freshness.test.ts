@@ -120,6 +120,12 @@ test("a [REPORT] that is a whole quoted argv element is a report; prose quoting 
   expect(anchoredReportLine(`${argv}\nSend "[REPORT] demo-lane | milestone | next step" to the lead`, "demo-lane")).toBe("[REPORT] demo-lane | milestone | tests pass, PR opened");
 });
 
+test("the screen grammar reads the same kinds as dori report --kind, halted and question included", () => {
+  for (const kind of ["milestone", "blocker", "halted", "question", "done"]) {
+    expect(anchoredReportLine(`[REPORT] demo-lane | ${kind} | owner said stop`, "demo-lane")).toBe(`[REPORT] demo-lane | ${kind} | owner said stop`);
+  }
+});
+
 test("a quoted placeholder is a template, but a placeholder after a later pipe is real report text", () => {
   expect(anchoredReportLine('[REPORT] demo-lane | milestone | "$text"', "demo-lane")).toBeNull();
   expect(anchoredReportLine("[REPORT] demo-lane | milestone | `<what>`", "demo-lane")).toBeNull();

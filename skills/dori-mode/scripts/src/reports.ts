@@ -3,7 +3,7 @@ import { join } from "node:path";
 
 import { LANE_KEY } from "./registry.ts";
 
-export type ReportKind = "milestone" | "blocker" | "halted" | "done";
+export type ReportKind = "milestone" | "blocker" | "question" | "halted" | "done";
 export type ProgressState = "running" | "blocked" | "halted" | "done" | "stalled";
 export type Report = {
   readonly type: "report";
@@ -29,12 +29,14 @@ export type Progress = {
 export class ReportError extends Error {}
 
 export const isReportKind = (value: unknown): value is ReportKind =>
-  value === "milestone" || value === "blocker" || value === "halted" || value === "done";
+  value === "milestone" || value === "blocker" || value === "question" || value === "halted" || value === "done";
 
+// A question waits on the owner's answer, so it is blocked like a blocker: posted, never nudged.
 export const reportState = (kind: ReportKind): ProgressState => {
   switch (kind) {
     case "milestone": return "running";
     case "blocker": return "blocked";
+    case "question": return "blocked";
     case "halted": return "halted";
     case "done": return "done";
   }
