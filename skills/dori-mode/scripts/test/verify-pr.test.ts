@@ -171,6 +171,16 @@ test("names may vary and GitHub noreply is accepted only as a merge committer", 
   expect(checkPr(fixture("browser-test-only")).warnings).toEqual([]);
 });
 
+test("a configured noreply@github.com identity does not let GitHub's address pass outside a merge committer", () => {
+  const github = { name: "GitHub", email: "noreply@github.com" };
+  const c = commit([source, changedTest]);
+  const byGithub = { ...c, commit: { ...c.commit, author: github, committer: github } };
+  const result = checkPr(snapshot([byGithub]), { expectedIdentity: github });
+  expect(result.ok).toBe(false);
+  expect(result.errors).toHaveLength(2);
+  expect(checkPr(snapshot([{ ...byGithub, parents: [{ sha }, { sha: otherSha }] }]), { expectedIdentity: github }).errors).toHaveLength(1);
+});
+
 test("a configured identity without a string name or email fails before a GitHub read, without throwing", async () => {
   const run: Runner = async () => { throw new Error("gh must not be called"); };
   for (const bad of [{ email: IDENTITY.email }, { name: "Example Dev", email: 12345 }, null]) {
