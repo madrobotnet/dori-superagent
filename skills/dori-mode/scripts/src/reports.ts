@@ -100,7 +100,7 @@ export class Reports {
   append(event: LaneEvent): void {
     const path = this.path(event.key);
     parseEvent(JSON.stringify(event), event.key);
-    mkdirSync(join(this.stateDir, "lanes", event.key), { recursive: true });
+    mkdirSync(join(this.stateDir, "lanes", event.key), { recursive: true, mode: 0o700 });
     appendFileSync(path, `${JSON.stringify(event)}\n`, { encoding: "utf8", mode: 0o600 });
   }
 

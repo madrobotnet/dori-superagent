@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { appendFileSync, readFileSync } from "node:fs";
+import { appendFileSync, readFileSync, statSync } from "node:fs";
+import { join } from "node:path";
 
 import { freshnessTick } from "../src/freshness.ts";
 import { parseEvent, ReportError, Reports, reportLine } from "../src/reports.ts";
@@ -238,4 +239,15 @@ test("structured lanes never fall back to unrelated pane report text", async () 
   // When forwarding is due; then the missing journal remains explicit.
   expect((await freshnessTick(deps, "/home/test")).map((act) => act.kind)).toEqual(["no-report"]);
   expect(world.calls.some((call) => call[0] === "notify")).toBe(false);
+});
+
+test("the lane journal directory is private (0700), like the 0600 journal", () => {
+  const state = withState();
+  const umask = process.umask(0o022);
+  try {
+    const reports = new Reports(state.dir);
+    reports.report("private-lane", "milestone", "first", T0);
+    expect(statSync(join(state.dir, "lanes", "private-lane")).mode & 0o777).toBe(0o700);
+    expect(statSync(reports.path("private-lane")).mode & 0o777).toBe(0o600);
+  } finally { process.umask(umask); state.done(); }
 });
