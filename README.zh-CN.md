@@ -186,7 +186,7 @@ dori 和 omo 用同一种方式发送匿名的使用计数：OTLP/HTTP JSON 日�
 
 1 个端到端测试（`test/e2e.test.ts`）在隔离的具名会话里起一个真实的 herdr 服务器，创建工作区，注册 lead 窗格，再启动一条 lane，其 Agent 用 `test/fixtures/fake-agent.sh` 顶替 omo。脚本读取 brief，调用 `dori report` 和 `dori ready`；测试检查 `[START]`、`[REPORT]`、`[READY]` 是否到达 lead 窗格，以及 `dori done` 是否关掉了这条 lane。PATH 上没有 `herdr` 时它会被跳过，运行时带着 `DORI_TELEMETRY=0`。`bun run typecheck` 执行 `tsc --noEmit`。
 
-Dori 模式有自己的 116 个测试，跑在假的 herdr、git 和 gh 上：
+Dori 模式有自己的 121 个测试，跑在假的 herdr、git 和 gh 上：
 
 ```sh
 cd skills/dori-mode/scripts && bun install && bun test

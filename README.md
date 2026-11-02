@@ -188,7 +188,7 @@ Eleven telemetry unit tests (`test/telemetry.test.ts`) cover the opt-out; the no
 
 One end-to-end test (`test/e2e.test.ts`) starts a real herdr server in an isolated named session, creates a workspace, registers a lead pane, and starts a lane whose agent is `test/fixtures/fake-agent.sh` in place of omo. The script reads its brief, calls `dori report` and `dori ready`, and the test checks that `[START]`, `[REPORT]` and `[READY]` arrive in the lead pane and that `dori done` closes the lane. It is skipped when `herdr` is not on PATH and runs with `DORI_TELEMETRY=0`. `bun run typecheck` runs `tsc --noEmit`.
 
-Dori mode has its own 116 tests, against fake herdr, git and gh:
+Dori mode has its own 121 tests, against fake herdr, git and gh:
 
 ```sh
 cd skills/dori-mode/scripts && bun install && bun test
