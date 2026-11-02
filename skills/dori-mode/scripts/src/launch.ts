@@ -57,11 +57,12 @@ export const launchLane = async (deps: FlowDeps, input: LaunchInput): Promise<{ 
   const made = (JSON.parse(created.out) as { result: { root_pane: { pane_id: string; tab_id?: string }; tab_id?: string } }).result;
   const pane = made.root_pane.pane_id;
   const tab = made.tab_id ?? made.root_pane.tab_id;
-  const prompt = `${deps.config.launchKeywords}. Read and execute the lane brief at ${input.brief} in full. You are the ${input.key} lane; report as the brief's footer says.`;
-  await deps.run(["herdr", "pane", "run", pane, fill(deps.config.agentCommand, { model, prompt }).map(quoteForPane).join(" ")]);
+  // Registered before the agent starts: dori report refuses an unknown key, so a fast lane's first report would be lost.
   const lane: Lane = { ...draft, pane, ...(tab ? { tab } : {}) };
   await deps.registry.write(lane);
   new Reports(deps.config.stateDir).report(lane.key, "milestone", `Lane launched in ${pane}`, deps.clock.now());
+  const prompt = `${deps.config.launchKeywords}. Read and execute the lane brief at ${input.brief} in full. You are the ${input.key} lane; report as the brief's footer says.`;
+  await deps.run(["herdr", "pane", "run", pane, fill(deps.config.agentCommand, { model, prompt }).map(quoteForPane).join(" ")]);
   await deps.clock.sleep(20_000);
   const screen = await readScreen(deps.run, pane, 40);
   const bad = STARTUP_FAILURE.exec(screen);
