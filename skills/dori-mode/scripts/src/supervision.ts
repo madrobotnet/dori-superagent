@@ -168,8 +168,11 @@ export class Supervision {
     const hungMessage = "Working/Running timer exceeded threshold without fresh report, checkpoint, or file activity";
     const alerts = terminal ? [] : [...(violations.length ? violations : hung ? [hungMessage] : []), ...unavailable];
     const freshAlerts = alerts.filter((message) => !previous?.alerts.includes(message));
-    if (!terminal && violations.length && progress?.state !== "blocked") {
-      this.reports.report(lane.key, "blocker", violations.join("; "), now);
+    // A question also reads as blocked; only this same ceiling blocker as the latest report makes a new one a repeat.
+    const blocker = violations.join("; ");
+    const reported = progress?.lastReport?.kind === "blocker" && progress.lastReport.text === blocker;
+    if (!terminal && violations.length && !reported) {
+      this.reports.report(lane.key, "blocker", blocker, now);
     } else if (!terminal && hung && (!progress || progress.state === "running")) {
       this.reports.append({ type: "activity", key: lane.key, at: new Date(now).toISOString(), state: "stalled", text: hungMessage });
     } else if (!alerts.length && progress?.state === "stalled" && activity !== previous?.activity) {

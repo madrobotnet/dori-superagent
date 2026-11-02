@@ -123,6 +123,20 @@ describe("supervision", () => {
     } finally { f.done(); }
   });
 
+  test("a ceiling reached while the lane waits on a question still appends a durable blocker", async () => {
+    const f = fixture({ defaults: { wallMinutes: 1 } });
+    try {
+      const reports = new Reports(f.dir);
+      reports.report(lane.key, "question", "which branch?", f.clock.now());
+      f.clock.at += 60_000;
+      expect((await f.supervisor.sweep(lane, "")).alerts).toEqual(["wallMinutes ceiling reached (1)"]);
+      expect(reports.read(lane.key)?.lastReport).toMatchObject({ kind: "blocker", text: "wallMinutes ceiling reached (1)" });
+      f.clock.at += 60_000;
+      await f.supervisor.sweep(lane, "");
+      expect(readFileSync(reports.path(lane.key), "utf8").trim().split("\n")).toHaveLength(2);
+    } finally { f.done(); }
+  });
+
   test("lane budgets override defaults and unknown usage stays null in persisted close snapshot", async () => {
     const f = fixture({ usageArgv: ["usage"], recordCostArgv: ["record", "{key}", "{tokens}", "{costUsd}"], defaults: { wallMinutes: 0, tokens: 0, costUsd: 0 } });
     try {
