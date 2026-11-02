@@ -167,6 +167,32 @@ test("a closed lane owns no pane, so a pane left behind by a failed close is unr
   expect(result.lines).toContain("UNREGISTERED w2:p1 w2:p3");
 });
 
+test("an unreadable lane file is named and the other lanes are still checked", async () => {
+  // Given a partial lane record next to a lane whose pane vanished.
+  const world = newWorld();
+  const deps = bootDeps(world);
+  await deps.registry.write(lane("healthy", "working", "w1:gone"));
+  writeFileSync(deps.registry.path("broken"), "{partial");
+  // When boot runs; then the file is named, the healthy lane is still reported, and the run is incomplete.
+  const result = await bootCheck(deps);
+  expect(result.lines).toContain(`REGISTRY unreadable ${deps.registry.path("broken")}`);
+  expect(result.lines).toContain("VANISHED healthy pane=w1:gone status=working; registry and worktrees preserved; no relaunch");
+  expect(result.lines.at(-1)).toBe("BOOT incomplete read-only; nothing restarted, written or stopped");
+  expect(result.exitCode).toBe(1);
+});
+
+test("a lanes path that cannot be listed is named and the rest of boot still runs", async () => {
+  // Given a lanes path that is a file, not a directory.
+  const world = newWorld();
+  const deps = bootDeps(world);
+  writeFileSync(join(state.dir, "lanes"), "not a directory");
+  // When boot runs; then the registry is named unreadable and the later checks still print.
+  const result = await bootCheck(deps);
+  expect(result.lines).toContain(`REGISTRY unreadable ${join(state.dir, "lanes")}`);
+  expect(result.lines.some((l) => l.startsWith("MONITORS cleanupCandidates="))).toBe(true);
+  expect(result.exitCode).toBe(1);
+});
+
 test("a failed pane list stays unknown instead of declaring every lane vanished", async () => {
   // Given herdr failing to list panes.
   const world = newWorld();

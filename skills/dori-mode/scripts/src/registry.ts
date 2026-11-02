@@ -92,6 +92,20 @@ export class Registry {
     return lanes;
   }
 
+  /** Like list(), but a lane file that cannot be read or parsed is returned in `unreadable` instead of throwing. */
+  async scan(): Promise<{ lanes: Lane[]; unreadable: string[] }> {
+    const lanes: Lane[] = [];
+    const unreadable: string[] = [];
+    for (const f of this.files()) {
+      try {
+        lanes.push((await Bun.file(f).json()) as Lane);
+      } catch {
+        unreadable.push(f);
+      }
+    }
+    return { lanes, unreadable };
+  }
+
   async open(): Promise<Lane[]> {
     return (await this.list()).filter((l) => statusOf(l) !== "closed");
   }

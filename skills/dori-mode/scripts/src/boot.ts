@@ -132,7 +132,20 @@ export const bootCheck = async (deps: BootDeps): Promise<{ exitCode: number; lin
   }
   const lanes: BootLane[] = [];
   const journals: string[] = [];
-  for (const lane of (await deps.registry.list()).sort((a, b) => a.key.localeCompare(b.key))) {
+  // An unreadable lane file, or a lanes path that cannot be listed, is named; the other lanes and checks still run.
+  let registered: Lane[] = [];
+  try {
+    const scanned = await deps.registry.scan();
+    registered = scanned.lanes;
+    for (const path of scanned.unreadable) {
+      failed = true;
+      lines.push(`REGISTRY unreadable ${shellQuote(path)}`);
+    }
+  } catch {
+    failed = true;
+    lines.push(`REGISTRY unreadable ${shellQuote(deps.registry.dir)}`);
+  }
+  for (const lane of registered.sort((a, b) => a.key.localeCompare(b.key))) {
     // Only launched lanes report through the journal, as in freshness; an adopted lane's records are not its state.
     if (lane.reportProtocol !== "jsonl-v1") {
       lanes.push(lane);
