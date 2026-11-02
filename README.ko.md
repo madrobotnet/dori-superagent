@@ -203,7 +203,7 @@ dori는 omo와 같은 방식으로 익명 사용 횟수를 보냅니다. OTLP/HT
 
 ## 테스트
 
-저장소 루트에서 `bun test ./test/`를 치면 하네스 테스트 29개가 돌고, 모델은 부르지 않습니다. 그냥 `bun test`를 치면 Dori 모드 테스트까지 같이 돕니다.
+저장소 루트에서 `bun test ./test/`를 치면 하네스 테스트 57개가 돌고, 모델은 부르지 않습니다. 그냥 `bun test`를 치면 Dori 모드 테스트까지 같이 돕니다.
 
 하네스 단위 테스트 8개(`test/harness.test.ts`)는 가짜 herdr(`test/fake.ts`)를 상대로 돕니다. `herdr`와 `gh` 바이너리 대신 들어가는 레코더로, 에이전트 상태를 바꿀 수 있는 pane들을 들고 있고, 테스트가 손으로 돌리는 시계가 있습니다. 다루는 것은 레인 시작과 READY, 바쁜 리드의 큐와 묶음 전달, 모르는 대상 거절, 10분과 20분의 nudge와 40분의 에스컬레이션과 WAITING 레인 제외, working과 lost 상태, 머지 게이트의 모든 분기(영수증 없음, BLOCK, 빈 체크 목록, 빨간 체크, 전부 skip, CLEAR + 녹색), VERDICT 줄 없는 리뷰어입니다.
 
@@ -213,7 +213,7 @@ dori는 omo와 같은 방식으로 익명 사용 횟수를 보냅니다. OTLP/HT
 
 엔드투엔드 테스트 2개(`test/e2e.test.ts`) 중 첫 번째는 격리된 이름의 세션에 진짜 herdr 서버를 띄우고, 워크스페이스를 만들고, 리드 pane을 등록하고, omo 대신 `test/fixtures/fake-agent.sh`를 에이전트로 쓰는 레인을 시작합니다. 이 스크립트는 브리프를 읽고 `dori report`와 `dori ready`를 부르고, 테스트는 `[START]`, `[REPORT]`, `[READY]`가 리드 pane에 도착하는지와 `dori done`이 레인을 닫는지 확인합니다. 두 번째는 백로그 항목을 넣고 `dori loop --once`를 돌린 뒤, 루프가 시작한 레인이 READY까지 가는지, `[LOOP ...]`가 리드 pane에 도착하는지, `dori loop stop` 뒤의 실행이 아무것도 하지 않는지 확인합니다. 둘 다 PATH에 `herdr`가 없으면 건너뛰고, `DORI_TELEMETRY=0`으로 돕니다. `bun run typecheck`는 `tsc --noEmit`입니다.
 
-Dori 모드에는 가짜 herdr, git, gh를 상대로 하는 자체 테스트 193개가 있습니다.
+Dori 모드에는 가짜 herdr, git, gh를 상대로 하는 자체 테스트 217개가 있습니다.
 
 ```sh
 cd skills/dori-mode/scripts && bun install && bun test

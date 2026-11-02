@@ -28,7 +28,7 @@
   "supervision": {
     "hungAfterMinutes": 20,
     "staleAfterMinutes": 20,
-    "defaults": { "wallMinutes": 240, "tokens": null, "costUsd": null },
+    "defaults": { "wallMinutes": null, "tokens": null, "costUsd": null },
     "lanes": {},
     "activityPaths": [],
     "gitActivity": true
