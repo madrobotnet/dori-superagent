@@ -76,7 +76,7 @@ export const checkPr = (snapshot: PrSnapshot, options: VerifyPrOptions = {}): Ve
     for (const role of ["author", "committer"] as const) {
       const actual = c.commit[role];
       if (typeof actual?.name !== "string" || !actual.name.trim() || typeof actual?.email !== "string" || !actual.email.trim()) errors.push(`${c.sha}: missing ${role} identity; expected ${identity.name} <${identity.email}>`);
-      else if (actual.email !== identity.email &&
+      else if (actual.email.toLowerCase() !== identity.email.toLowerCase() &&
         !(role === "committer" && actual.email === "noreply@github.com" && Array.isArray(c.parents) && c.parents.length > 1)) {
         errors.push(`${c.sha}: wrong ${role} email ${actual.email}; expected ${identity.email}${role === "committer" ? " (or noreply@github.com for a merge commit)" : ""}`);
       }

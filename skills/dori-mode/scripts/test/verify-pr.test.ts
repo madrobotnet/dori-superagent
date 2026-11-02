@@ -137,6 +137,13 @@ test("both identities need nonempty names and the expected email", () => {
   }
 });
 
+test("emails match whatever their case", () => {
+  const c = commit([source, changedTest]);
+  const upper = { name: IDENTITY.name, email: IDENTITY.email.toUpperCase() };
+  expect(checkPr(snapshot([{ ...c, commit: { ...c.commit, author: upper, committer: upper } }])).ok).toBe(true);
+  expect(checkPr(snapshot([c]), { expectedIdentity: { name: IDENTITY.name, email: "12345+Example@Users.NoReply.GitHub.com" } }).ok).toBe(true);
+});
+
 test("names may vary and GitHub noreply is accepted only as a merge committer", () => {
   const c = commit([source, changedTest]);
   const renamed = { name: "example", email: IDENTITY.email };
