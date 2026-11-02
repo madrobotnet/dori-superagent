@@ -27,6 +27,7 @@ const holder = (dir: string) => {
 };
 
 const input: CheckpointInput = { step: "deploy", result: "completed", evidence: ["receipt:123"], remoteEffects: ["release:123"] };
+const next: CheckpointInput = { ...input, step: "next", remoteEffects: ["release:456"] };
 
 describe("checkpoints", () => {
   test("persists completion and returns identical replay unchanged after restart", () => {
@@ -58,6 +59,17 @@ describe("checkpoints", () => {
     } finally { state.done(); }
   });
 
+  test("a remote-effect receipt already recorded under one step is refused under another", () => {
+    const state = withState();
+    try {
+      const journal = new Checkpoints(state.dir);
+      const first = journal.write("demo-lane", input, 1000);
+      expect(() => journal.write("demo-lane", { ...input, step: "deploy-again" }, 2000))
+        .toThrow("remote effect release:123 already recorded by step deploy");
+      expect(journal.read("demo-lane")).toEqual([first.checkpoint]);
+    } finally { state.done(); }
+  });
+
   test("rejects malformed input, invalid keys, corrupt journals and duplicate stored steps", () => {
     const state = withState();
     try {
@@ -68,7 +80,7 @@ describe("checkpoints", () => {
       const { checkpoint } = journal.write("demo-lane", input, 1000);
       appendFileSync(journal.path("demo-lane"), `${JSON.stringify(checkpoint)}\n`);
       expect(() => journal.read("demo-lane")).toThrow("duplicate step");
-      expect(() => journal.write("demo-lane", { ...input, step: "next" }, 1000)).toThrow(CheckpointError);
+      expect(() => journal.write("demo-lane", next, 1000)).toThrow(CheckpointError);
     } finally { state.done(); }
   });
 
@@ -80,12 +92,12 @@ describe("checkpoints", () => {
       journal.write("demo-lane", input, Date.now());
       await locked;
       const before = readFileSync(journal.path("demo-lane"), "utf8");
-      expect(() => journal.write("demo-lane", { ...input, step: "next" }, Date.now())).toThrow(`writer locked: demo-lane (pid ${proc.pid}`);
+      expect(() => journal.write("demo-lane", next, Date.now())).toThrow(`writer locked: demo-lane (pid ${proc.pid}`);
       expect(readFileSync(journal.path("demo-lane"), "utf8")).toBe(before);
       proc.stdin.write("release\n");
       await proc.stdin.end();
       expect(await proc.exited).toBe(0);
-      journal.write("demo-lane", { ...input, step: "next" }, Date.now());
+      journal.write("demo-lane", next, Date.now());
       expect(journal.read("demo-lane").map((c) => c.step)).toEqual(["deploy", "next"]);
       expect(existsSync(`${journal.path("demo-lane")}.lock`)).toBe(false);
     } finally { proc.kill(); state.done(); }
@@ -116,8 +128,8 @@ describe("checkpoints", () => {
       expect(journal.read("demo-lane")).toHaveLength(1);
       // The lock directory an earlier build left behind has no owner record; its age decides.
       mkdirSync(`${journal.path("demo-lane")}.lock`);
-      expect(() => journal.write("demo-lane", { ...input, step: "next" }, Date.now())).toThrow("writer locked");
-      journal.write("demo-lane", { ...input, step: "next" }, Date.now() + LOCK_STALE_MS + 1000);
+      expect(() => journal.write("demo-lane", next, Date.now())).toThrow("writer locked");
+      journal.write("demo-lane", next, Date.now() + LOCK_STALE_MS + 1000);
       expect(journal.read("demo-lane").map((c) => c.step)).toEqual(["deploy", "next"]);
     } finally { state.done(); }
   });

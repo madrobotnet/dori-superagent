@@ -152,10 +152,16 @@ export class Checkpoints {
     // Never replay a remote effect just because the process restarted: the step check runs under the lock.
     const release = this.lock(key, now);
     try {
-      const previous = this.read(key).find((entry) => entry.step === input.step);
+      const recorded = this.read(key);
+      const previous = recorded.find((entry) => entry.step === input.step);
       if (previous) {
         if (payload(previous) !== payload(input)) throw new CheckpointError(`conflicting checkpoint step: ${input.step}`);
         return { checkpoint: previous, unchanged: true };
+      }
+      // A receipt names one completed remote effect; recording it under a second step would read as a second effect.
+      for (const entry of recorded) {
+        const repeated = input.remoteEffects.find((receipt) => entry.remoteEffects.includes(receipt));
+        if (repeated !== undefined) throw new CheckpointError(`remote effect ${repeated} already recorded by step ${entry.step}`);
       }
       const checkpoint: Checkpoint = { key, at, ...JSON.parse(payload(input)) };
       const fd = openSync(path, "a", 0o600);
