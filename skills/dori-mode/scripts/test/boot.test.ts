@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 
 import { bootCheck, type Manifest, type Monitor, monitorCleanup, readMonitorManifests, reconcilePanes, slackAuthCheck } from "../src/boot.ts";
 import { Slack } from "../src/messenger/slack.ts";
-import type { Lane, LaneStatus } from "../src/registry.ts";
+import { type Lane, type LaneStatus, Registry } from "../src/registry.ts";
 import { Reports } from "../src/reports.ts";
 import { depsFor, fakeClock, newWorld, withState, type World } from "./fakes.ts";
 
@@ -398,6 +398,34 @@ test("expired and delivery-paused watches are listed apart from live ones, and a
     'STOP in the owner session only: kill_bash({"bash_id":"mon_PAUSED"})',
     `EXPIRED closed match=closed:command:key ${owner} expiresAt=${new Date(T0 - 1).toISOString()}; nothing to stop`,
   ]);
+});
+
+test("dori boot reads the current session's terminal metadata from PI_SESSION_DIR and PI_SESSION_FILE", async () => {
+  // Given a closed lane and one watch on it in each of the two env-named session directories, outside sessionsDir.
+  const home = join(state.dir, "home");
+  const stateDir = join(state.dir, "state");
+  const current = join(state.dir, "current", "extensions", "terminal");
+  const fileDir = join(state.dir, "other", "extensions", "terminal");
+  for (const dir of [home, current, fileDir]) mkdirSync(dir, { recursive: true });
+  await new Registry(stateDir).write(lane("closed", "closed"));
+  writeFileSync(join(current, "a.json"), JSON.stringify(manifest([{ command: "dori watch closed", monitorId: "mon_SESSIONDIR" }]).data));
+  writeFileSync(join(fileDir, "b.json"), JSON.stringify(manifest([{ command: "dori watch closed", monitorId: "mon_SESSIONFILE" }]).data));
+  // When the real CLI runs boot with no Slack token and no herdr on PATH.
+  const proc = Bun.spawn([process.execPath, join(import.meta.dir, "..", "src", "cli.ts"), "boot"], {
+    env: {
+      HOME: home, PATH: dirname(process.execPath), TMPDIR: state.dir, DORI_TELEMETRY: "0",
+      DORI_CONFIG: join(home, "none.json"), DORI_STATE_DIR: stateDir, DORI_LEAD_PANE: "w9:p1",
+      PI_SESSION_DIR: join(state.dir, "current"), PI_SESSION_FILE: join(state.dir, "other", "session.jsonl"),
+    },
+    stdout: "pipe", stderr: "pipe",
+  });
+  const [out, code] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
+  // Then both directories were read, Slack was skipped, and the missing pane list makes the run incomplete.
+  expect(out).toContain(`CLEANUP closed match=closed:command:key ownerSession=owner metadata=${join(current, "a.json")}`);
+  expect(out).toContain(`CLEANUP closed match=closed:command:key ownerSession=owner metadata=${join(fileDir, "b.json")}`);
+  expect(out).toContain("SLACK skipped (DORI_SLACK_TOKEN not set)");
+  expect(out).toContain("PANES unavailable (herdr pane list failed)");
+  expect(code).toBe(1);
 });
 
 test("one unreadable metadata file is named and the other sessions' cleanup is still listed, path quoted", async () => {
