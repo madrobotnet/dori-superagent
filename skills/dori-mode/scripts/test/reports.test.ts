@@ -217,6 +217,25 @@ test("a lane that reports every 10 minutes still gets its latest report posted, 
   expect(posts().at(-1)).toContain("step three");
 });
 
+test("a report written in the same millisecond as the last post is still posted later, once", async () => {
+  // Given a post at T0+21 and a blocker the lane writes in that same millisecond, just after the tick.
+  const world = newWorld();
+  const clock = fakeClock(T0 + 21 * MIN);
+  const deps = depsFor(world, clock, state.dir, { hooks: { threadReply: ["notify", "{thread}", "{text}"] } });
+  await deps.registry.write(lane);
+  reports.report(lane.key, "milestone", "step one", T0 + 15 * MIN);
+  expect((await freshnessTick(deps, "/home/test")).map((act) => act.kind)).toEqual(["posted"]);
+  reports.report(lane.key, "blocker", "needs the owner", T0 + 21 * MIN);
+  // When the thread has been quiet for postAfterMin again; then the blocker is posted, and only once.
+  clock.at = T0 + 45 * MIN;
+  expect((await freshnessTick(deps, "/home/test")).map((act) => act.kind)).toEqual(["posted"]);
+  clock.at = T0 + 70 * MIN;
+  await freshnessTick(deps, "/home/test");
+  const posts = world.calls.filter((call) => call[0] === "notify").map((call) => call[2]);
+  expect(posts).toHaveLength(2);
+  expect(posts.at(-1)).toContain("needs the owner");
+});
+
 test("an adopted lane ignores a journal record and keeps the screen path", async () => {
   // Given an adopted lane (no reportProtocol) with a blocker record and 30 silent minutes.
   const world = newWorld();
