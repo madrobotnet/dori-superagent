@@ -28,6 +28,8 @@ export type BootDeps = Pick<FlowDeps, "run" | "registry" | "config"> & {
   /** null when no Slack token is configured; boot then skips the check. */
   readonly slack: SlackCheck;
   readonly monitorDirs?: readonly string[];
+  /** How long the Slack step may take; withBackoff alone can retry for minutes. */
+  readonly slackDeadlineMs?: number;
 };
 
 const finished = (lane: BootLane): boolean => ["closed", "verified-done"].includes(statusOf(lane)) || lane.reportState === "done";
@@ -133,13 +135,6 @@ export const readMonitorManifests = (sessionsDir: string, extraDirs: readonly st
 export const bootCheck = async (deps: BootDeps): Promise<{ exitCode: number; lines: string[] }> => {
   const lines: string[] = [];
   let failed = false;
-  try {
-    const auth = await deps.slack();
-    lines.push(auth ? `SLACK authenticated user=${auth.userId} team=${auth.teamId} (auth.test only; inbox delivery unverified)` : "SLACK skipped (DORI_SLACK_TOKEN not set)");
-  } catch {
-    failed = true;
-    lines.push("SLACK auth failed");
-  }
   const lanes: BootLane[] = [];
   const journals: string[] = [];
   // An unreadable lane file, or a lanes path that cannot be listed, is named; the other lanes and checks still run.
@@ -203,6 +198,21 @@ export const bootCheck = async (deps: BootDeps): Promise<{ exitCode: number; lin
   for (const item of cleanup) {
     lines.push(`CLEANUP ${item.lanes.join(",")} ownerSession=${item.sessionId} metadata=${shellQuote(item.metadata)}${item.suspended ? " suspended=true" : ""}`);
     lines.push(`STOP in the owner session only: ${item.stop}`);
+  }
+  // The network step runs last, after every local check, and gives up at a short deadline.
+  const deadlineMs = deps.slackDeadlineMs ?? 10_000;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    const auth = await Promise.race([deps.slack(), new Promise<"timeout">((resolve) => { timer = setTimeout(() => resolve("timeout"), deadlineMs); })]);
+    if (auth === "timeout") {
+      failed = true;
+      lines.push(`SLACK auth.test timed out after ${deadlineMs} ms`);
+    } else lines.push(auth ? `SLACK authenticated user=${auth.userId} team=${auth.teamId} (auth.test only; inbox delivery unverified)` : "SLACK skipped (DORI_SLACK_TOKEN not set)");
+  } catch {
+    failed = true;
+    lines.push("SLACK auth failed");
+  } finally {
+    clearTimeout(timer);
   }
   lines.push(`BOOT ${failed ? "incomplete" : "checked"} read-only; nothing restarted, written or stopped`);
   return { exitCode: failed ? 1 : 0, lines };

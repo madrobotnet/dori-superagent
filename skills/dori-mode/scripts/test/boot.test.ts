@@ -133,7 +133,7 @@ test("boot reports vanished panes, journals and stale watches, and writes nothin
   const result = await bootCheck(deps);
   // Then every finding is printed, the exit is clean, and no file changed.
   expect(result.exitCode).toBe(0);
-  expect(result.lines[0]).toBe("SLACK authenticated user=U_FIXTURE team=T_FIXTURE (auth.test only; inbox delivery unverified)");
+  expect(result.lines).toContain("SLACK authenticated user=U_FIXTURE team=T_FIXTURE (auth.test only; inbox delivery unverified)");
   expect(result.lines).toContain("VANISHED api-release pane=w1:p8 status=working; registry and worktrees preserved; no relaunch");
   expect(result.lines).toContain("UNREGISTERED w2:p1");
   expect(result.lines).toContain("REPORT api-release kind=halted at=2026-01-01T12:00:00.000Z state=halted registryStatus=working");
@@ -213,9 +213,9 @@ test("Slack is optional, and a failed check never prints the provider error", as
   const skipped = await bootCheck(bootDeps(world));
   const failed = await bootCheck(bootDeps(world, async () => { throw new Error("FIXTURE_TOKEN"); }));
   // Then a missing token is a skip, and a failure is incomplete without the error text.
-  expect(skipped.lines[0]).toBe("SLACK skipped (DORI_SLACK_TOKEN not set)");
+  expect(skipped.lines).toContain("SLACK skipped (DORI_SLACK_TOKEN not set)");
   expect(skipped.exitCode).toBe(0);
-  expect(failed.lines[0]).toBe("SLACK auth failed");
+  expect(failed.lines).toContain("SLACK auth failed");
   expect(failed.exitCode).toBe(1);
   expect(failed.lines.join("\n")).not.toContain("FIXTURE_TOKEN");
 });
@@ -238,6 +238,23 @@ test("the Slack step reads auth.test through the client and fails when it return
   expect(bad.lines).toContain("SLACK auth failed");
   expect(bad.exitCode).toBe(1);
   expect(await slackAuthCheck(null)()).toBeNull();
+});
+
+test("Slack runs after the local checks and a stalled auth.test ends at the deadline", async () => {
+  // Given a Slack step that records how many local calls ran before it, then never answers.
+  const world = newWorld();
+  let localCallsFirst = -1;
+  const stalled = async () => {
+    localCallsFirst = world.calls.length;
+    return await new Promise<never>(() => {});
+  };
+  // When boot runs with a short deadline.
+  const result = await bootCheck({ ...bootDeps(world, stalled), slackDeadlineMs: 20 });
+  // Then the pane list ran first, the stall is reported as a timeout, and the run is incomplete.
+  expect(localCallsFirst).toBe(1);
+  expect(result.lines).toContain("SLACK auth.test timed out after 20 ms");
+  expect(result.lines.at(-1)).toBe("BOOT incomplete read-only; nothing restarted, written or stopped");
+  expect(result.exitCode).toBe(1);
 });
 
 test("a corrupt journal is reported for its lane and does not stop the check", async () => {
