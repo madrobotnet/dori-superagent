@@ -72,7 +72,7 @@ export class Checkpoints {
     const path = this.path(key);
     if (!existsSync(path)) return [];
     const steps = new Set<string>();
-    return readFileSync(path, "utf8").split("\n").filter((line) => line.trim()).map((line, index) => {
+    return readFileSync(path, "utf8").split("\n").map((line, index) => ({ line, index })).filter(({ line }) => line.trim()).map(({ line, index }) => {
       try {
         const value = JSON.parse(line) as Checkpoint;
         validate(value);

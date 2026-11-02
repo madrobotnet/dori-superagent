@@ -70,6 +70,16 @@ describe("checkpoints", () => {
     } finally { state.done(); }
   });
 
+  test("a corrupt record after a blank line is reported at its physical line", () => {
+    const state = withState();
+    try {
+      const journal = new Checkpoints(state.dir);
+      journal.write("demo-lane", input, 1000);
+      appendFileSync(journal.path("demo-lane"), "\n{not json\n");
+      expect(() => journal.read("demo-lane")).toThrow(`${journal.path("demo-lane")}:3:`);
+    } finally { state.done(); }
+  });
+
   test("rejects malformed input, invalid keys, corrupt journals and duplicate stored steps", () => {
     const state = withState();
     try {
