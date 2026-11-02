@@ -44,8 +44,9 @@ type Observation = {
   readonly alerts: readonly string[];
 };
 
-// Match only an explicit duration on a visible Working/Running line.
-export const workingTimer = (screen: string): { kind: string; seconds: number } | null => {
+// Match only an explicit duration on a visible Working/Running line. step is the smallest unit shown, in seconds:
+// "25m" is rounded to the minute, so two readings can place the same call's start up to a minute apart.
+export const workingTimer = (screen: string): { kind: string; seconds: number; step: number } | null => {
   for (const line of Bun.stripANSI(screen).split("\n")) {
     const kind = /^\s*[^\w\n]*(Working|Running)\b/i.exec(line)?.[1]?.toLowerCase();
     if (!kind) continue;
@@ -53,11 +54,11 @@ export const workingTimer = (screen: string): { kind: string; seconds: number } 
     if (clock) {
       const seconds = clock[3] === undefined ? Number(clock[1]) * 60 + Number(clock[2]) :
         Number(clock[1]) * 3600 + Number(clock[2]) * 60 + Number(clock[3]);
-      return { kind, seconds };
+      return { kind, seconds, step: 1 };
     }
     const parts = [...line.matchAll(/(\d+(?:\.\d+)?)\s*(h(?:ours?)?|m(?:in(?:utes?)?)?|s(?:ec(?:onds?)?)?)\b/gi)];
-    if (parts.length) return { kind, seconds: parts.reduce((sum, match) =>
-      sum + Number(match[1]) * (/^h/i.test(match[2] ?? "") ? 3600 : /^m/i.test(match[2] ?? "") ? 60 : 1), 0) };
+    const unit = (name = ""): number => (/^h/i.test(name) ? 3600 : /^m/i.test(name) ? 60 : 1);
+    if (parts.length) return { kind, seconds: parts.reduce((sum, match) => sum + Number(match[1]) * unit(match[2]), 0), step: Math.min(...parts.map((match) => unit(match[2]))) };
   }
   return null;
 };
@@ -156,8 +157,9 @@ export class Supervision {
     exceeds("costUsd", usage.costUsd);
     const hung = previous !== null && timer !== null && previous.timer !== null &&
       timer.kind === previous.timerKind && timer.seconds > previous.timer &&
-      // A changed timer origin means a new call, even if its duration is larger.
-      Math.abs((now - timer.seconds * 1000) - (previous.at - previous.timer * 1000)) <= 2000 &&
+      // A changed timer origin means a new call, even if its duration is larger. Rounding to the shown unit moves the
+      // computed origin by up to one unit, plus sweep jitter.
+      Math.abs((now - timer.seconds * 1000) - (previous.at - previous.timer * 1000)) <= timer.step * 1000 + 2000 &&
       timer.seconds >= (this.options.hungAfterMinutes ?? 20) * 60 &&
       now - activeAt >= (this.options.staleAfterMinutes ?? 20) * 60_000;
     const progress = this.reports.read(lane.key);

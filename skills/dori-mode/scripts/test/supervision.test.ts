@@ -67,6 +67,15 @@ describe("supervision", () => {
     } finally { f.done(); }
   });
 
+  test("a minute-rounded timer is hung even when sweeps do not line up with its minute boundary", async () => {
+    const f = fixture({ staleAfterMinutes: 0 });
+    try {
+      await f.supervisor.sweep(lane, "Working 25m");
+      f.clock.at += 90_000; // the real timer went 25m10s -> 26m40s and shows 26m
+      expect((await f.supervisor.sweep(lane, "Working 26m")).state).toBe("stalled");
+    } finally { f.done(); }
+  });
+
   test("report and checkpoint progress suppress hung detection until stale", async () => {
     const f = fixture();
     try {
@@ -195,9 +204,10 @@ describe("supervision", () => {
   });
 
   test("parses visible timer variants but not unrelated or absent durations", () => {
-    expect(workingTimer("\x1b[32m* Working (1h 2m 3s)\x1b[0m")).toEqual({ kind: "working", seconds: 3723 });
-    expect(workingTimer("Running 21:05")).toEqual({ kind: "running", seconds: 1265 });
-    expect(workingTimer("Running 1:02:03")).toEqual({ kind: "running", seconds: 3723 });
+    expect(workingTimer("\x1b[32m* Working (1h 2m 3s)\x1b[0m")).toEqual({ kind: "working", seconds: 3723, step: 1 });
+    expect(workingTimer("Running 21:05")).toEqual({ kind: "running", seconds: 1265, step: 1 });
+    expect(workingTimer("Working 25m")).toEqual({ kind: "working", seconds: 1500, step: 60 });
+    expect(workingTimer("Running 1:02:03")).toEqual({ kind: "running", seconds: 3723, step: 1 });
     expect(workingTimer("Working ...")).toBeNull();
     expect(workingTimer("log mentions Working 20m")).toBeNull();
   });
