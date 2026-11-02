@@ -23,6 +23,11 @@ beforeEach(() => {
 });
 afterEach(() => state.done());
 
+// Every directory and file under the state dir, with file bytes, so a created directory counts as a write too.
+const snapshot = (dir: string) => readdirSync(dir, { recursive: true, withFileTypes: true })
+  .map((e) => [join(e.parentPath, e.name), e.isFile() ? readFileSync(join(e.parentPath, e.name), "utf8") : e.isDirectory() ? "<dir>" : "<other>"])
+  .sort((a, b) => (a[0] ?? "").localeCompare(b[0] ?? ""));
+
 const bootDeps = (world: World, slack: () => Promise<{ userId: string; teamId: string } | null> = async () => null) => {
   const sessionsDir = join(state.dir, "sessions");
   const deps = depsFor(world, fakeClock(T0), state.dir, { sessionsDir, leadPane: "w2:p1" });
@@ -122,9 +127,7 @@ test("boot reports vanished panes, journals and stale watches, and writes nothin
   const terminal = join(deps.sessionsDir, "lead", "extensions", "terminal");
   mkdirSync(terminal, { recursive: true });
   writeFileSync(join(terminal, "owner.json"), JSON.stringify(manifest([{ description: "closed reports", monitorId: "mon_REALFIXTURE" }]).data));
-  const snapshot = () => readdirSync(state.dir, { recursive: true, withFileTypes: true }).filter((e) => e.isFile())
-    .map((e) => [join(e.parentPath, e.name), readFileSync(join(e.parentPath, e.name), "utf8")]);
-  const before = snapshot();
+  const before = snapshot(state.dir);
   // When boot runs.
   const result = await bootCheck(deps);
   // Then every finding is printed, the exit is clean, and no file changed.
@@ -135,8 +138,20 @@ test("boot reports vanished panes, journals and stale watches, and writes nothin
   expect(result.lines).toContain("REPORT api-release kind=halted at=2026-01-01T12:00:00.000Z state=halted registryStatus=working");
   expect(result.lines).toContain('STOP in the owner session only: kill_bash({"bash_id":"mon_REALFIXTURE"})');
   expect(result.lines.some((l) => l.startsWith("VANISHED closed"))).toBe(false);
-  expect(snapshot()).toEqual(before);
+  expect(snapshot(state.dir)).toEqual(before);
   expect(world.calls.every((c) => c[0] === "herdr" && c[1] === "pane" && c[2] === "list")).toBe(true);
+});
+
+test("boot on a state dir with no lanes directory leaves it byte-identical", async () => {
+  // Given a state dir that has never held a lane.
+  const world = newWorld();
+  const deps = bootDeps(world);
+  writeFileSync(join(state.dir, "messenger.json"), "{}");
+  const before = snapshot(state.dir);
+  // When boot runs; then it finishes clean and creates no lanes directory or anything else.
+  const result = await bootCheck(deps);
+  expect(result.exitCode).toBe(0);
+  expect(snapshot(state.dir)).toEqual(before);
 });
 
 test("a closed lane owns no pane, so a pane left behind by a failed close is unregistered", async () => {

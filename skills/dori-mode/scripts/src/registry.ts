@@ -76,10 +76,19 @@ export class Registry {
     renameSync(tmp, this.path(lane.key));
   }
 
+  // Reading never creates the lanes directory (dori boot is read-only); write() creates it.
+  private files(): string[] {
+    try {
+      return readdirSync(this.dir).filter((f) => f.endsWith(".json")).map((f) => join(this.dir, f));
+    } catch (e) {
+      if ((e as NodeJS.ErrnoException).code === "ENOENT") return [];
+      throw e;
+    }
+  }
+
   async list(): Promise<Lane[]> {
-    mkdirSync(this.dir, { recursive: true });
     const lanes: Lane[] = [];
-    for (const f of readdirSync(this.dir)) if (f.endsWith(".json")) lanes.push((await Bun.file(join(this.dir, f)).json()) as Lane);
+    for (const f of this.files()) lanes.push((await Bun.file(f).json()) as Lane);
     return lanes;
   }
 
