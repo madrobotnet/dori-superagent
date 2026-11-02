@@ -69,6 +69,15 @@ Prints `key | thread | pane | session | status` for every open lane and every un
 ### `dori report <key> --kind milestone|blocker|question|halted|done --text TEXT`
 Run by a lane. Appends one record to `<stateDir>/lanes/<key>/reports.jsonl` and prints the `[REPORT] <key> | <kind> | <text>` line the lane then sends to the lead pane. Each record is a single append, so the lane and the lead can write at the same time without losing one. The last record is the lane's progress state: `milestone` is running, `blocker` and `question` blocked (a question waits on the owner's answer), `halted` halted, `done` done. The screen grammar takes the same five kinds. Text stays data: newlines are folded into the printed line, never into the journal. A corrupt journal is an error with its line number, never an empty state. Lanes opened by `dori launch` are told to report this way and are marked `reportProtocol: "jsonl-v1"`; launch starts their journal with a `running` activity record, which is not a report and is never posted.
 
+### `dori boot`
+Run by the lead after a restart or a compaction, before it trusts what it remembers. It is read-only: it writes no registry record, relaunches nothing and stops no watch. It prints:
+- `SLACK authenticated user=... team=...` from `auth.test` when `DORI_SLACK_TOKEN` is set (`SLACK skipped` otherwise). This proves the token, not that messages arrive.
+- `PANES` with the lead pane's state, then `VANISHED <key> pane=...` for each open lane whose pane is gone, and `UNREGISTERED <panes>` for panes no lane owns. If `herdr pane list` fails, no lane is called vanished.
+- `REPORT <key> kind=... at=... state=...` for each launched (`jsonl-v1`) lane's last report, next to its registry status, since the two can disagree after a crash. A journal that holds only records dori wrote itself (the launch, a screen-detected stall) is `NO-REPORT <key>`, never a report. An adopted lane's journal is not read, as in `freshness`. An unreadable journal is `JOURNAL-ERROR <key>: ...` for that lane only; the other lanes are still checked.
+- `CLEANUP` and `STOP in the owner session only: kill_bash(...)` for persistent watches that touch only finished lanes (closed, verified done, or a `done` report). It reads the terminal metadata in `<sessionsDir>/*/extensions/terminal` and the current session's (`PI_SESSION_DIR`, `PI_SESSION_FILE`). A watch that also names an active lane, or names a key only as a prefix, is kept. Only the session that owns a watch can stop it. The metadata path is shell-quoted. A metadata file that cannot be read or parsed is printed as `MONITORS unreadable <path>` and skipped; the other files are still read.
+
+Exit 0 ends with `BOOT checked`. Any input that could not be read (Slack, panes, a journal, metadata) is printed and gives `BOOT incomplete`, exit 1.
+
 ### `dori claim-done [<key>] --evidence TEXT` / `dori object-done <key> --reason TEXT ...`
 The two halves of the done flow. Both message the lane's pane and check that Enter registered.
 

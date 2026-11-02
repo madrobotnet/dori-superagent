@@ -70,6 +70,7 @@ Real work runs in its own herdr tab, called a lane. The protocol, with the reaso
 - **Done** is a claim, not a fact. A lane claims with `dori claim-done <key> --evidence "..."`. You check the evidence against live state. If it holds, close; if not, `dori object-done <key> --reason "..."` within 5 minutes. An unanswered claim closes the lane automatically, unless its worktree has unpushed or uncommitted work or a `Done =` signal fails, which turns the claim into not-done with that reason. Full protocol for lanes: `references/done-protocol.md`; tell every lane this rule when you hand it work.
 - **Before messaging a session**, confirm its pane runs a live agent with an empty input line, send once, and verify the text left the input. Never send to a shell, a stopped agent or an approval prompt.
 - Watch for sessions that turn blocked or ask a question; answer them or bring them to the owner.
+- After a restart or a compaction, run `dori boot` before acting on what you remember. A `VANISHED` lane keeps its registry record and worktree; find out what happened before relaunching it.
 
 ## Standing rules
 
@@ -91,6 +92,7 @@ Real work runs in its own herdr tab, called a lane. The protocol, with the reaso
 |---|---|
 | `dori launch` / `dori adopt` | open a lane in a new tab, or register one already running |
 | `dori sync [--write]` | rebuild the registry from live panes, report drift |
+| `dori boot` | after a restart or compaction: vanished panes, lane journals, watches left on finished lanes; read-only |
 | `dori report` | a lane records a milestone, blocker, question, halt or done in its `reports.jsonl` and prints the `[REPORT]` line |
 | `dori claim-done` / `dori object-done` / `dori close` | the done flow |
 | `dori pause` / `dori resume` | the owner said wait: no nudges, goal paused, running turn stopped; and back |

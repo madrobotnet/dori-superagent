@@ -1,6 +1,8 @@
 #!/usr/bin/env bun
+import { dirname, join } from "node:path";
 import { parseArgs } from "node:util";
 
+import { bootCheck } from "./boot.ts";
 import { loadConfig } from "./config.ts";
 import { deadPaneTick, newDeadPaneState } from "./dead-panes.ts";
 import { claimDone, closeLane, type FlowDeps, objectDone, watchTick } from "./done-flow.ts";
@@ -29,6 +31,7 @@ const USAGE = `dori <command> [options]
   launch <key> --title T --brief FILE --done "merged o/r#N; closed o/r#M" [--thread REF] [--model M] [--cwd DIR]
   adopt  <key> --pane ID --title T --brief FILE --done "..." [--thread REF]
   sync   [--write]                     registry vs live panes; read-only unless --write
+  boot                                 read-only check after a restart: Slack auth, vanished panes, journals, stale watches
   report <key> --kind milestone|blocker|question|halted|done --text TEXT
                                        append a durable progress report and print its [REPORT] line
   claim-done [<key>] --evidence TEXT  key defaults to the lane registered for $HERDR_PANE_ID
@@ -120,6 +123,23 @@ try {
       console.log(r.drift.length ? `DRIFT (${r.drift.length}):\n${r.drift.map((d) => `- ${d}`).join("\n")}` : "DRIFT none");
       console.log(flags.values.write ? "WROTE session ids" : "READ_ONLY");
       break;
+    }
+    case "boot": {
+      const token = process.env.DORI_SLACK_TOKEN;
+      const slack = token ? new Slack(fetchHttp, realClock, { token, cookie: process.env.DORI_SLACK_COOKIE }) : null;
+      const sessionDirs = [process.env.PI_SESSION_DIR, process.env.PI_SESSION_FILE && dirname(process.env.PI_SESSION_FILE)];
+      const r = await bootCheck({
+        ...deps,
+        reports: new Reports(config.stateDir),
+        slack: async () => {
+          if (!slack) return null;
+          const auth = await slack.call("auth.test", {});
+          return { userId: String(auth.user_id), teamId: String(auth.team_id) };
+        },
+        monitorDirs: sessionDirs.flatMap((dir) => (dir ? [join(dir, "extensions", "terminal")] : [])),
+      });
+      for (const line of r.lines) console.log(line);
+      process.exit(r.exitCode);
     }
     case "claim-done":
       console.log(await claimDone(deps, await lane(key), need("evidence")));
