@@ -91,6 +91,16 @@ test("compaction failure stalls immediately and Working resumes progress", () =>
   expect(reports.read(lane.key)?.lastReport?.at).toBe(new Date(T0).toISOString());
 });
 
+test("a compaction error left above a later Working line does not keep the lane stalled", () => {
+  // Given a lane that stalled on a compaction failure.
+  reports.report(lane.key, "milestone", "started", T0);
+  expect(reports.observe(lane.key, "Error: compaction failed\n❯ ", T0 + MIN, 15 * MIN)?.state).toBe("stalled");
+  // When it recovers while the old error is still on screen; then Working below it wins.
+  expect(reports.observe(lane.key, "Error: compaction failed\n❯ retry\nWorking (3s)\n❯ ", T0 + 2 * MIN, 15 * MIN)?.state).toBe("running");
+  // And a new failure below the Working line stalls it again.
+  expect(reports.observe(lane.key, "Working (3s)\nauto-compaction failed\n❯ ", T0 + 3 * MIN, 15 * MIN)?.state).toBe("stalled");
+});
+
 test("only a stale idle prompt stalls and repeated observations do not grow the log", () => {
   // Given a milestone with a fresh prompt.
   reports.report(lane.key, "milestone", "started", T0);
