@@ -156,6 +156,22 @@ test("launch registers the lane before it starts the agent, so the lane's first 
   expect(atStart?.pane).toBe("w:p9");
 });
 
+test("the harness launch record is not the lane's report: a silent launched lane is NO-REPORT, never posted", async () => {
+  const brief = join(state.dir, "brief.md");
+  writeFileSync(brief, "# brief\n");
+  world.screen = "Working (1m)\n❯ ";
+  const clock = fakeClock(T0);
+  const base = depsFor(world, clock, state.dir, { hooks: { threadReply: ["notify", "{thread}", "{text}"] } });
+  const deps = { ...base, run: async (argv: readonly string[]) => {
+    if (argv[0] === "herdr" && argv[1] === "tab" && argv[2] === "create") return { code: 0, out: JSON.stringify({ result: { root_pane: { pane_id: "w:p9" }, tab_id: "w:t9" } }), err: "" };
+    return base.run(argv);
+  } };
+  await launchLane(deps, { key: "new-lane", title: "t", brief, done: "closed acme/app#3", thread: "chat:team/9" });
+  clock.at = T0 + 21 * MIN;
+  expect((await freshnessTick(deps, "/home/test")).map((a) => a.kind)).toEqual(["nudged", "no-report"]);
+  expect(world.calls.some((c) => c[0] === "notify")).toBe(false);
+});
+
 test("the host guard alerts on low disk, clears when it recovers, and flips compute readiness on load", () => {
   const t = { loadAlert: 150, loadOk: 80, memFreeMinPct: 20, diskFreeMinGb: 50, panesMax: 20 };
   const st = { alerting: false } as { alerting: boolean; computeReady?: boolean };

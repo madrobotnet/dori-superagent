@@ -60,7 +60,9 @@ export const launchLane = async (deps: FlowDeps, input: LaunchInput): Promise<{ 
   // Registered before the agent starts: dori report refuses an unknown key, so a fast lane's first report would be lost.
   const lane: Lane = { ...draft, pane, ...(tab ? { tab } : {}) };
   await deps.registry.write(lane);
-  new Reports(deps.config.stateDir).report(lane.key, "milestone", `Lane launched in ${pane}`, deps.clock.now());
+  // The launch is an activity record, not a report: it starts the journal (so the screen is watched for a stall) but is
+  // never posted to the thread as if the agent had reported.
+  new Reports(deps.config.stateDir).append({ type: "activity", key: lane.key, at: iso(deps.clock), state: "running", text: `lane launched in ${pane}` });
   const prompt = `${deps.config.launchKeywords}. Read and execute the lane brief at ${input.brief} in full. You are the ${input.key} lane; report as the brief's footer says.`;
   await deps.run(["herdr", "pane", "run", pane, fill(deps.config.agentCommand, { model, prompt }).map(quoteForPane).join(" ")]);
   await deps.clock.sleep(20_000);
