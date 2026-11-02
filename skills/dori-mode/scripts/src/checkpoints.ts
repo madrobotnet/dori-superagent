@@ -76,7 +76,7 @@ export class Checkpoints {
       try {
         const value = JSON.parse(line) as Checkpoint;
         validate(value);
-        if (value.key !== key || !Number.isFinite(Date.parse(value.at)) || steps.has(value.step)) {
+        if (value.key !== key || typeof value.at !== "string" || !Number.isFinite(Date.parse(value.at)) || steps.has(value.step)) {
           throw new CheckpointError("invalid key, timestamp, or duplicate step");
         }
         steps.add(value.step);

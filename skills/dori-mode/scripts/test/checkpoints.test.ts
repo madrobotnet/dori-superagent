@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { appendFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { CheckpointError, Checkpoints, LOCK_STALE_MS, type CheckpointInput } from "../src/checkpoints.ts";
@@ -77,6 +77,16 @@ describe("checkpoints", () => {
       journal.write("demo-lane", input, 1000);
       appendFileSync(journal.path("demo-lane"), "\n{not json\n");
       expect(() => journal.read("demo-lane")).toThrow(`${journal.path("demo-lane")}:3:`);
+    } finally { state.done(); }
+  });
+
+  test("a stored record whose timestamp is not a string is refused", () => {
+    const state = withState();
+    try {
+      const journal = new Checkpoints(state.dir);
+      const { checkpoint } = journal.write("demo-lane", input, 1000);
+      writeFileSync(journal.path("demo-lane"), `${JSON.stringify({ ...checkpoint, at: 1000 })}\n`);
+      expect(() => journal.read("demo-lane")).toThrow("invalid key, timestamp, or duplicate step");
     } finally { state.done(); }
   });
 
