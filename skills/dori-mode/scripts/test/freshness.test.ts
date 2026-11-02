@@ -102,3 +102,9 @@ test("template shapes from #29 are not reports; the emitted report still wins", 
   expect(anchoredReportLine("[REPORT] demo-lane | milestone | set $HOME in docs", "demo-lane")).toBe("[REPORT] demo-lane | milestone | set $HOME in docs");
   expect(anchoredReportLine("[REPORT] demo-lane | done | 100% of checks green", "demo-lane")).toBe("[REPORT] demo-lane | done | 100% of checks green");
 });
+
+test("a quoted placeholder is a template, but a placeholder after a later pipe is real report text", () => {
+  expect(anchoredReportLine('[REPORT] demo-lane | milestone | "$text"', "demo-lane")).toBeNull();
+  expect(anchoredReportLine("[REPORT] demo-lane | milestone | `<what>`", "demo-lane")).toBeNull();
+  expect(anchoredReportLine("[REPORT] demo-lane | milestone | deployed api | %s", "demo-lane")).toBe("[REPORT] demo-lane | milestone | deployed api | %s");
+});
