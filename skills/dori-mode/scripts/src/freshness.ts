@@ -22,9 +22,17 @@ export const scrubForThread = (line: string, home: string): string =>
     .trim();
 
 // Only a line that starts with [REPORT] is a report. Instructions, prompts and argv arrays that quote the grammar
-// mid-line are dropped before parsing, so an example is never posted as the lane's progress.
+// mid-line are dropped before parsing, so an example is never posted as the lane's progress. A line whose whole
+// report text is one unfilled placeholder ($name, ${name}, {name}, %s, <what>) is a template, quoted or not (#29).
+const placeholderOnly = /\|\s*(\$\{?[A-Za-z_]\w*\}?|\{[A-Za-z_][\w.]*\}|%[sdif]|<[^>]+>)["'`)\s]*$/;
 export const anchoredReportLine = (screen: string, key: string): string | null =>
-  lastReportLine(screen.split("\n").filter((l) => !l.includes("[REPORT]") || /^\s*\[REPORT\]/.test(l)).join("\n"), key);
+  lastReportLine(
+    screen
+      .split("\n")
+      .filter((l) => !l.includes("[REPORT]") || (/^\s*\[REPORT\]/.test(l) && !placeholderOnly.test(l)))
+      .join("\n"),
+    key,
+  );
 
 export type SweepAct = {
   readonly kind: "nudged" | "posted" | "no-report" | "pending-report" | "stale-report" | "working-while-paused" | "stalled";

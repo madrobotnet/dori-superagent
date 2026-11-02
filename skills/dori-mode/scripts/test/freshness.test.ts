@@ -85,3 +85,20 @@ console.log(JSON.stringify([
   expect({ code, stderr }).toEqual({ code: 0, stderr: "" });
   expect(JSON.parse(stdout)).toEqual([null, report]);
 });
+
+test("template shapes from #29 are not reports; the emitted report still wins", () => {
+  const emitted = "[REPORT] demo-lane | milestone | checks passed";
+  const screen = [
+    emitted,
+    'echo "[REPORT] demo-lane | milestone | $message"',
+    'printf "[REPORT] demo-lane | milestone | %s\\n" "$msg"',
+    "[REPORT] demo-lane | milestone | $message",
+    "[REPORT] demo-lane | done | %s",
+    "[REPORT] demo-lane | milestone | ${message}",
+  ].join("\n");
+  expect(anchoredReportLine(screen, "demo-lane")).toBe(emitted);
+  expect(anchoredReportLine("[REPORT] demo-lane | milestone | $message", "demo-lane")).toBeNull();
+  expect(anchoredReportLine("[REPORT] demo-lane | done | %s", "demo-lane")).toBeNull();
+  expect(anchoredReportLine("[REPORT] demo-lane | milestone | set $HOME in docs", "demo-lane")).toBe("[REPORT] demo-lane | milestone | set $HOME in docs");
+  expect(anchoredReportLine("[REPORT] demo-lane | done | 100% of checks green", "demo-lane")).toBe("[REPORT] demo-lane | done | 100% of checks green");
+});
