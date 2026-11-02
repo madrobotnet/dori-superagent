@@ -74,7 +74,7 @@ export class Supervision {
     return lane.reportProtocol === "jsonl-v1" || existsSync(this.reports.path(lane.key));
   }
 
-  private async usage(lane: SupervisedLane, now: number): Promise<UsageSnapshot> {
+  private async usage(lane: SupervisedLane, now: number, persist = Boolean(this.options.usageArgv?.length)): Promise<UsageSnapshot> {
     let usage: Usage = { tokens: null, costUsd: null };
     if (this.options.usageArgv?.length) {
       const result = await this.deps.run(fill(this.options.usageArgv, { key: lane.key, session: lane.session ?? "", cwd: lane.cwd ?? "" }), { cwd: lane.cwd, timeoutMs: 10_000 });
@@ -93,6 +93,8 @@ export class Supervision {
       }
     }
     const snapshot = { key: lane.key, at: new Date(now).toISOString(), ...usage };
+    // Without a usage hook every sweep would append the same unknown reading; close still records its final one.
+    if (!persist) return snapshot;
     const path = join(dirname(this.reports.path(lane.key)), "cost.jsonl");
     mkdirSync(dirname(path), { recursive: true });
     appendFileSync(path, `${JSON.stringify(snapshot)}\n`, { mode: 0o600 });
@@ -175,6 +177,7 @@ export class Supervision {
     }
     // Save the post-blocker signature so our own report does not count as progress.
     const observation: Observation = { at: now, timer: timer?.seconds ?? null, timerKind: timer?.kind ?? null, activity: await this.activity(lane), activeAt, alerts };
+    mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
     const temporary = `${path}.${process.pid}.tmp`;
     writeFileSync(temporary, JSON.stringify(observation), { mode: 0o600 });
     renameSync(temporary, path);
@@ -184,7 +187,7 @@ export class Supervision {
 
   async close(lane: SupervisedLane): Promise<UsageSnapshot | null> {
     if (!this.enabled(lane)) return null;
-    const snapshot = await this.usage(lane, this.deps.clock.now());
+    const snapshot = await this.usage(lane, this.deps.clock.now(), true);
     if (this.options.recordCostArgv?.length && (snapshot.tokens !== null || snapshot.costUsd !== null)) {
       const result = await this.deps.run(fill(this.options.recordCostArgv, {
         key: lane.key, session: lane.session ?? "", tokens: snapshot.tokens === null ? "null" : String(snapshot.tokens),

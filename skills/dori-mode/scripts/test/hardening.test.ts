@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { loadConfig } from "../src/config.ts";
@@ -142,6 +142,20 @@ test("a lane whose supervision state is corrupt is reported once and the sweep g
     expect(first.map((a) => [a.kind, a.lane]).sort()).toEqual([["blocked", good.key], ["supervision-error", bad.key]]);
     // The same error is not printed again on the next tick.
     expect((await freshnessTick(deps, "/home/test")).filter((a) => a.kind === "supervision-error")).toEqual([]);
+  } finally { state.done(); }
+});
+
+test("a sweep with no usage hook writes no cost readings", async () => {
+  const state = withState();
+  try {
+    const world = newWorld(), clock = fakeClock(T0);
+    const deps = depsFor(world, clock, state.dir, { nudgeAfterMin: 999, supervision: { gitActivity: false } });
+    await deps.registry.write(lane);
+    new Reports(state.dir).report(lane.key, "milestone", "started", T0);
+    await freshnessTick(deps, "/home/test");
+    clock.at += MIN;
+    await freshnessTick(deps, "/home/test");
+    expect(existsSync(join(state.dir, "lanes", lane.key, "cost.jsonl"))).toBe(false);
   } finally { state.done(); }
 });
 
