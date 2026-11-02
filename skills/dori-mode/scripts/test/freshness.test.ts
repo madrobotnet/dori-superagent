@@ -112,6 +112,9 @@ test("a [REPORT] that is a whole quoted argv element is a report; prose quoting 
   for (const row of [
     'Send "[REPORT] demo-lane | milestone | tests pass" to the lead pane',
     'echo "[REPORT] demo-lane | milestone | tests pass"',
+    'Example from the docs: run, "[REPORT] demo-lane | milestone | all tests green", then wait.',
+    '["herdr", "pane", "run", lead, "[REPORT] demo-lane | milestone | unquoted element before it"]',
+    '["[REPORT] demo-lane | milestone | report not last", "herdr"]',
     '["herdr", "pane", "run", "lead:p1", "[REPORT] demo-lane | milestone | $message"]',
     '["herdr", "pane", "run", "lead:p1", "[REPORT] demo-lane | milestone | %s"]',
     '["herdr", "pane", "run", "lead:p1", "[REPORT] demo-lane | milestone | ${text}"]',
