@@ -48,10 +48,12 @@ describe("checkpoints", () => {
     const state = withState();
     try {
       const journal = new Checkpoints(state.dir);
-      journal.write("demo-lane", input, 1000);
+      const first = journal.write("demo-lane", input, 1000);
+      const before = readFileSync(journal.path("demo-lane"), "utf8");
       expect(() => new Checkpoints(state.dir).write("demo-lane", { ...input, remoteEffects: ["release:other"] }, 2000))
         .toThrow("conflicting checkpoint step");
-      expect(journal.read("demo-lane")).toHaveLength(1);
+      expect(journal.read("demo-lane")).toEqual([first.checkpoint]);
+      expect(readFileSync(journal.path("demo-lane"), "utf8")).toBe(before);
       expect(existsSync(`${journal.path("demo-lane")}.lock`)).toBe(false);
     } finally { state.done(); }
   });
