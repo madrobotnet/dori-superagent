@@ -61,6 +61,19 @@ test("freshness persists a wall ceiling blocker without sending or terminating",
   } finally { state.done(); }
 });
 
+test("a launched lane with no report journal is not supervised by freshness", async () => {
+  const state = withState();
+  try {
+    const world = newWorld();
+    const deps = depsFor(world, fakeClock(T0 + MIN), state.dir, { nudgeAfterMin: 999, supervision: { defaults: { wallMinutes: 1 }, gitActivity: false } });
+    await deps.registry.write(lane);
+    world.screen = "Working (41m 0s)\n❯ ";
+    expect((await freshnessTick(deps, "/home/test")).map((a) => a.kind)).not.toContain("blocked");
+    expect(existsSync(join(state.dir, "lanes", lane.key, "supervision.json"))).toBe(false);
+    expect(existsSync(new Reports(state.dir).path(lane.key))).toBe(false);
+  } finally { state.done(); }
+});
+
 test("Runner preserves leading status columns and NUL delimiters when requested", async () => {
   // Given git-like machine output; when passed through the actual runner.
   const result = await run([process.execPath, "-e", 'process.stdout.write(" M source.ts\\u0000")'], { preserveOutput: true });

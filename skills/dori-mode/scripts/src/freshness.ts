@@ -1,3 +1,5 @@
+import { existsSync } from "node:fs";
+
 import { fill } from "./config.ts";
 import type { FlowDeps } from "./done-flow.ts";
 import { checkPausedLane } from "./pause.ts";
@@ -102,7 +104,8 @@ export const freshnessTick = async (deps: FlowDeps, home: string): Promise<Sweep
         const screen = await readScreen(deps.run, lane.pane);
         let supervised: SupervisionResult | null = null;
         try {
-          supervised = await supervision.sweep(lane, screen);
+          // A launched lane is supervised once its journal exists; without one there is no progress to judge.
+          if (existsSync(reports.path(lane.key))) supervised = await supervision.sweep(lane, screen);
         } catch (error) {
           // Supervision is advisory: its failure is printed once per reason, and the lane's reports still flow.
           const detail = error instanceof Error ? error.message : String(error);
