@@ -125,6 +125,26 @@ test("config with a malformed supervision entry fails with a named error, not a 
   } finally { state.done(); }
 });
 
+test("a lane whose supervision state is corrupt is reported once and the sweep goes on for the others", async () => {
+  const state = withState();
+  try {
+    const world = newWorld();
+    const deps = depsFor(world, fakeClock(T0 + MIN), state.dir, { nudgeAfterMin: 999, supervision: { defaults: { wallMinutes: 1 }, gitActivity: false } });
+    const bad = { ...lane, key: "bad-lane", pane: "qa:p2" };
+    const good = { ...lane, key: "good-lane" };
+    await deps.registry.write(bad);
+    await deps.registry.write(good);
+    const reports = new Reports(state.dir);
+    reports.report(bad.key, "milestone", "started", T0);
+    reports.report(good.key, "milestone", "started", T0);
+    writeFileSync(join(state.dir, "lanes", bad.key, "supervision.json"), "{not json");
+    const first = await freshnessTick(deps, "/home/test");
+    expect(first.map((a) => [a.kind, a.lane]).sort()).toEqual([["blocked", good.key], ["supervision-error", bad.key]]);
+    // The same error is not printed again on the next tick.
+    expect((await freshnessTick(deps, "/home/test")).filter((a) => a.kind === "supervision-error")).toEqual([]);
+  } finally { state.done(); }
+});
+
 test("authorized close records known cost and keeps it in the lane journal", async () => {
   // Given live done signals and a configured read-only usage source.
   const state = withState();

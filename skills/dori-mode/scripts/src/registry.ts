@@ -44,6 +44,8 @@ export type Lane = {
   readonly reportProtocol?: "jsonl-v1";
   readonly budget?: BudgetLimits;
   readonly activityPaths?: readonly string[];
+  /** The last supervision failure printed by `freshness`, so the same one is printed once. */
+  readonly lastSupervisionError?: string;
   readonly receipt?: unknown;
 };
 
