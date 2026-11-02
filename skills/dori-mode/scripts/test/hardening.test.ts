@@ -87,6 +87,7 @@ test("launch persists default and per-lane ceilings with explicit override prece
     }, { key: lane.key, title: "QA", brief, done: "merged acme/app#1", budget: { wallMinutes: null }, activityPaths: ["src/file.ts"] });
     // Then launched registry data, not prompt prose, pins the configured behavior.
     expect(result.lane.budget).toEqual({ wallMinutes: null, tokens: 2000, costUsd: null });
+    expect((await deps.registry.read(lane.key))?.budget).toEqual({ wallMinutes: null, tokens: 2000, costUsd: null });
     expect((await deps.registry.read(lane.key))?.activityPaths).toEqual(["src/file.ts"]);
     expect(new Reports(state.dir).read(lane.key)?.state).toBe("running");
   } finally { state.done(); }
