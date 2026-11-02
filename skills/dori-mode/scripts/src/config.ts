@@ -85,16 +85,29 @@ export class ConfigError extends Error {}
 
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
 
+const SUPERVISION_KEYS = new Set(["hungAfterMinutes", "staleAfterMinutes", "defaults", "lanes", "usageArgv", "recordCostArgv", "activityPaths", "gitActivity"]);
+const CEILINGS = new Set(["wallMinutes", "tokens", "costUsd"]);
+const checkCeilingNames = (where: string, budget: Record<string, unknown>): void => {
+  for (const name of Object.keys(budget)) {
+    if (!CEILINGS.has(name)) throw new ConfigError(`invalid supervision ${where}.${name}: unknown ceiling (expected wallMinutes, tokens or costUsd)`);
+  }
+};
+
 // A malformed supervision entry stops with its name: dropping it could turn a ceiling off, and keeping it would crash
-// every sweep later.
+// every sweep later. A misspelt name is refused for the same reason.
 const checkSupervision = (value: unknown): void => {
   if (value === undefined) return;
   if (!isRecord(value)) throw new ConfigError("invalid supervision: expected an object");
+  for (const name of Object.keys(value)) {
+    if (!SUPERVISION_KEYS.has(name)) throw new ConfigError(`invalid supervision ${name}: unknown setting`);
+  }
   for (const name of ["defaults", "lanes"] as const) {
     if (value[name] !== undefined && !isRecord(value[name])) throw new ConfigError(`invalid supervision ${name}: expected an object`);
   }
+  if (isRecord(value.defaults)) checkCeilingNames("defaults", value.defaults);
   for (const [key, budget] of Object.entries(isRecord(value.lanes) ? value.lanes : {})) {
     if (!isRecord(budget)) throw new ConfigError(`invalid supervision lanes.${key}: expected an object`);
+    checkCeilingNames(`lanes.${key}`, budget);
   }
   for (const name of ["usageArgv", "recordCostArgv", "activityPaths"] as const) {
     const list = value[name];

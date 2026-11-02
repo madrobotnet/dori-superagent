@@ -103,6 +103,15 @@ test("config rejects invalid ceilings and retains defaults when only one is over
     writeFileSync(path, JSON.stringify({ supervision: { defaults: { tokens: -1 } } }));
     // Then a typo cannot silently disable the budget.
     await expect(loadConfig(path)).rejects.toThrow("invalid supervision tokens");
+    // A misspelt ceiling name would leave that ceiling off, so it is refused by name.
+    for (const [supervision, message] of [
+      [{ defaults: { toknes: 4000 } }, "invalid supervision defaults.toknes: unknown ceiling"],
+      [{ lanes: { a: { costUSD: 5 } } }, "invalid supervision lanes.a.costUSD: unknown ceiling"],
+      [{ default: { tokens: 4000 } }, "invalid supervision default: unknown setting"],
+    ] as const) {
+      writeFileSync(path, JSON.stringify({ supervision }));
+      await expect(loadConfig(path)).rejects.toThrow(message);
+    }
   } finally { state.done(); }
 });
 
