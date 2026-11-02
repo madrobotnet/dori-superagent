@@ -6,7 +6,7 @@ import { deadPaneTick, newDeadPaneState } from "../src/dead-panes.ts";
 import { freshnessTick, lastReportLine } from "../src/freshness.ts";
 import { acquireSlot, releaseSlot } from "../src/heavy-slot.ts";
 import { guardTick } from "../src/host-guard.ts";
-import { adoptLane, launchLane, LaunchError } from "../src/launch.ts";
+import { adoptLane, footer, launchLane, LaunchError } from "../src/launch.ts";
 import type { Lane } from "../src/registry.ts";
 import { resolveSession } from "../src/session-id.ts";
 import { depsFor, fakeClock, newWorld, sent, withState, type World } from "./fakes.ts";
@@ -170,6 +170,17 @@ test("the harness launch record is not the lane's report: a silent launched lane
   clock.at = T0 + 21 * MIN;
   expect((await freshnessTick(deps, "/home/test")).map((a) => a.kind)).toEqual(["nudged", "no-report"]);
   expect(world.calls.some((c) => c[0] === "notify")).toBe(false);
+});
+
+test("the lane footer calls the skill CLI by its own path, never a bare dori that may be the root harness", async () => {
+  const text = footer({ ...working, key: "path-lane" }, "lead:p1");
+  const commands = [...text.matchAll(/bun (\S+) (report|claim-done) path-lane/g)];
+  expect(commands.map((m) => m[2])).toEqual(["report", "claim-done"]);
+  for (const [, cli] of commands) {
+    expect(cli).toEndWith("/skills/dori-mode/scripts/src/cli.ts");
+    expect(await Bun.file(cli ?? "").exists()).toBe(true);
+  }
+  expect(text).not.toMatch(/(^|\s)dori (report|claim-done)/);
 });
 
 test("the host guard alerts on low disk, clears when it recovers, and flips compute readiness on load", () => {
