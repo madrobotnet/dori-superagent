@@ -181,6 +181,14 @@ test("fix source classification includes styles, scripts, deletions, and old ren
   expect(checkPr(snapshot([commit([source], "fix(ui)!: change dialog contract")])).ok).toBe(false);
 });
 
+test("an unscoped fix: or fix!: commit that touches source needs a test like a scoped one", () => {
+  for (const message of ["fix: deliver to omo panes", "fix!: change dialog contract"]) {
+    expect(checkPr(snapshot([commit([source], message)])).ok).toBe(false);
+    expect(checkPr(snapshot([commit([source, changedTest], message)])).ok).toBe(true);
+  }
+  expect(checkPr(snapshot([commit([source], "fixup: tidy")])).ok).toBe(true);
+});
+
 test("async UI candidates include browser tests with .ts extensions, are deduplicated, and are never run", async () => {
   const p = fixture("browser-test-only");
   const fake = recordedRunner(p);

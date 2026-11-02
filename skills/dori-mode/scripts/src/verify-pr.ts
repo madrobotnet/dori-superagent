@@ -81,7 +81,7 @@ export const checkPr = (snapshot: PrSnapshot, options: VerifyPrOptions = {}): Ve
         errors.push(`${c.sha}: wrong ${role} email ${actual.email}; expected ${identity.email}${role === "committer" ? " (or noreply@github.com for a merge commit)" : ""}`);
       }
     }
-    if (/^fix\([^)]+\)!?:/.test(c.commit.message) && c.files.some((f) => isSource(f.filename) || (f.previous_filename !== undefined && isSource(f.previous_filename)))) {
+    if (/^fix(?:\([^)]+\))?!?:/.test(c.commit.message) && c.files.some((f) => isSource(f.filename) || (f.previous_filename !== undefined && isSource(f.previous_filename)))) {
       fixesSource = true;
       if (!c.files.some(changesTest)) warnings.push(`${c.sha}: fix commit changes source without its own added/changed test; coverage is evaluated across the PR`);
     }
