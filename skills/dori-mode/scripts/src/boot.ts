@@ -33,7 +33,8 @@ const finished = (lane: BootLane): boolean => ["closed", "verified-done"].includ
 
 export const reconcilePanes = (lanes: readonly Lane[], panes: readonly Pane[]): { lanes: { key: string; status: string; pane: string | null; paneState: PaneState }[]; unregistered: string[] } => {
   const live = new Set(panes.map((pane) => pane.pane_id));
-  const registered = new Set(lanes.flatMap((lane) => (lane.pane ? [lane.pane] : [])));
+  // A closed lane owns no pane: one left open by a failed close is unregistered, as in sync.
+  const registered = new Set(lanes.flatMap((lane) => (lane.pane && statusOf(lane) !== "closed" ? [lane.pane] : [])));
   return {
     lanes: lanes.map((lane) => ({
       key: lane.key, status: statusOf(lane), pane: lane.pane ?? null,
@@ -161,7 +162,7 @@ export const bootCheck = async (deps: BootDeps): Promise<{ exitCode: number; lin
     const result = reconcilePanes(lanes, panes);
     const lead = deps.config.leadPane;
     const vanished = result.lanes.filter((lane) => lane.paneState === "vanished" && lane.status !== "closed");
-    lines.push(`PANES lead=${lead || "unconfigured"} leadState=${panes.some((p) => p.pane_id === lead) ? "live" : "missing"} registeredLive=${result.lanes.filter((l) => l.paneState === "live").length} vanished=${vanished.length} unregistered=${result.unregistered.length}`);
+    lines.push(`PANES lead=${lead || "unconfigured"} leadState=${panes.some((p) => p.pane_id === lead) ? "live" : "missing"} registeredLive=${result.lanes.filter((l) => l.paneState === "live" && l.status !== "closed").length} vanished=${vanished.length} unregistered=${result.unregistered.length}`);
     for (const lane of vanished) lines.push(`VANISHED ${lane.key} pane=${lane.pane} status=${lane.status}; registry and worktrees preserved; no relaunch`);
     if (result.unregistered.length) lines.push(`UNREGISTERED ${result.unregistered.join(" ")}`);
   }

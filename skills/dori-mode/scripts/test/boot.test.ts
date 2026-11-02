@@ -139,6 +139,19 @@ test("boot reports vanished panes, journals and stale watches, and writes nothin
   expect(world.calls.every((c) => c[0] === "herdr" && c[1] === "pane" && c[2] === "list")).toBe(true);
 });
 
+test("a closed lane owns no pane, so a pane left behind by a failed close is unregistered", async () => {
+  // Given a closed lane whose pane is still open, and a working lane on a live pane.
+  const world = newWorld();
+  world.panes = [{ pane_id: "w2:p1", workspace_id: "w2" }, { pane_id: "w2:p2", workspace_id: "w2" }, { pane_id: "w2:p3", workspace_id: "w2" }];
+  const deps = bootDeps(world);
+  await deps.registry.write(lane("gone", "closed", "w2:p3"));
+  await deps.registry.write(lane("current", "working", "w2:p2"));
+  // When boot runs; then the leftover pane is listed and only the open lane counts as registered.
+  const result = await bootCheck(deps);
+  expect(result.lines).toContain("PANES lead=w2:p1 leadState=live registeredLive=1 vanished=0 unregistered=2");
+  expect(result.lines).toContain("UNREGISTERED w2:p1 w2:p3");
+});
+
 test("a failed pane list stays unknown instead of declaring every lane vanished", async () => {
   // Given herdr failing to list panes.
   const world = newWorld();
