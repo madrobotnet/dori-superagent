@@ -105,6 +105,15 @@ test("fixtures, source maps, and test helpers do not stand in for changed execut
   }
 });
 
+test("a real test whose name is helpers, mocks, fakes or fixture still counts; their directories do not", () => {
+  for (const filename of ["test/helpers.test.ts", "src/mocks.test.ts", "test/fakes.spec.js", "tests/fixture_test.py", "test/setup.test.ts"]) {
+    expect(checkPr(snapshot([commit([source, { filename, status: "added" }])])).ok).toBe(true);
+  }
+  for (const filename of ["test/mocks/api.test.ts", "src/helpers/format.test.ts"]) {
+    expect(checkPr(snapshot([commit([source, { filename, status: "added" }])])).ok).toBe(false);
+  }
+});
+
 test("an added or changed test in the fix commit passes, but deleting a test does not", () => {
   for (const status of ["added", "modified", "renamed", "copied", "changed"]) {
     expect(checkPr(snapshot([commit([source, { ...changedTest, status }])])).ok).toBe(true);

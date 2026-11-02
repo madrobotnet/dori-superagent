@@ -28,12 +28,14 @@ export type VerifyPrResult = {
   readonly loopCommand?: string;
 };
 
+// Fixture, helper, fake and mock directories never hold counted tests; a file with one of those names counts
+// only when it is named as a test (helpers.test.ts), not when it merely sits in a test directory (test/fakes.ts).
 const isTest = (path: string): boolean =>
-  !/(?:^|\/)(?:fixtures?|__fixtures__|__snapshots__|helpers?|fakes?|mocks?)(?:\/|\.|$)/i.test(path)
+  !/(?:^|\/)(?:fixtures?|__fixtures__|__snapshots__|helpers?|fakes?|mocks?)\//i.test(path)
   && (/(?:^|\/)[^/]+\.(?:test|spec)\.(?:[cm]?[jt]sx?|py|go|rs|rb|sh|java|kt|swift)$/i.test(path)
   || /(?:^|\/)(?:test_[^/]+\.py|[^/]+_test\.(?:go|py))$/i.test(path)
   || (/(?:^|\/)(?:tests?|__tests__)\//i.test(path) && /\.(?:[cm]?[jt]sx?|py|go|rs|rb|sh)$/i.test(path)
-    && !/(?:^|\/)(?:setup|conftest|test-utils)(?:\.|\/)/i.test(path)));
+    && !/(?:^|\/)(?:(?:setup|conftest|test-utils)[./]|(?:fixtures?|helpers?|fakes?|mocks?)\.[^/]*$)/i.test(path)));
 
 const isSource = (path: string): boolean =>
   !isTest(path) && !/(?:^|\/)(?:docs?|fixtures?|__fixtures__|__snapshots__)\//i.test(path)
