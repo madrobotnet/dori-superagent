@@ -137,6 +137,26 @@ describe("supervision", () => {
     } finally { f.done(); }
   });
 
+  test("an alert whose delivery failed is sent again on the next sweep, and a delivered one is not", async () => {
+    const f = fixture({ defaults: { wallMinutes: 1 } });
+    try {
+      const sent: string[] = [];
+      let failing = true;
+      const supervisor = new Supervision({ ...f.deps, alert: (_lane: Lane, message: string) => {
+        if (failing) throw new Error("messenger down");
+        sent.push(message);
+      } }, f.supervisor.options);
+      f.clock.at += 60_000;
+      await expect(supervisor.sweep(lane, "")).rejects.toThrow("messenger down");
+      failing = false;
+      f.clock.at += 60_000;
+      expect((await supervisor.sweep(lane, "")).alerts).toEqual(["wallMinutes ceiling reached (1)"]);
+      f.clock.at += 60_000;
+      expect((await supervisor.sweep(lane, "")).alerts).toEqual([]);
+      expect(sent).toEqual(["wallMinutes ceiling reached (1)"]);
+    } finally { f.done(); }
+  });
+
   test("lane budgets override defaults and unknown usage stays null in persisted close snapshot", async () => {
     const f = fixture({ usageArgv: ["usage"], recordCostArgv: ["record", "{key}", "{tokens}", "{costUsd}"], defaults: { wallMinutes: 0, tokens: 0, costUsd: 0 } });
     try {

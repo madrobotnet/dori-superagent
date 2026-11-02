@@ -178,13 +178,22 @@ export class Supervision {
     } else if (!alerts.length && progress?.state === "stalled" && activity !== previous?.activity) {
       this.reports.append({ type: "activity", key: lane.key, at: new Date(now).toISOString(), state: "running", text: "Fresh report, checkpoint, or file activity observed" });
     }
+    // Deliver before saving, so only alerts that reached the callback count as sent; a failed one is sent again next sweep.
+    const undelivered = new Map<string, string>();
+    for (const message of freshAlerts) {
+      try {
+        await this.deps.alert?.(lane, message);
+      } catch (error) {
+        undelivered.set(message, error instanceof Error ? error.message : String(error));
+      }
+    }
     // Save the post-blocker signature so our own report does not count as progress.
-    const observation: Observation = { at: now, timer: timer?.seconds ?? null, timerKind: timer?.kind ?? null, activity: await this.activity(lane), activeAt, alerts };
+    const observation: Observation = { at: now, timer: timer?.seconds ?? null, timerKind: timer?.kind ?? null, activity: await this.activity(lane), activeAt, alerts: alerts.filter((message) => !undelivered.has(message)) };
     mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
     const temporary = `${path}.${process.pid}.tmp`;
     writeFileSync(temporary, JSON.stringify(observation), { mode: 0o600 });
     renameSync(temporary, path);
-    for (const message of freshAlerts) await this.deps.alert?.(lane, message);
+    if (undelivered.size) throw new Error(`alert delivery failed for ${lane.key}: ${[...undelivered].map(([message, why]) => `${message} (${why})`).join("; ")}`);
     return { enabled: true, state: this.reports.read(lane.key)?.state ?? "running", alerts: freshAlerts, usage, hung };
   }
 
