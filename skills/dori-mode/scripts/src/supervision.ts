@@ -9,7 +9,7 @@ import type { Clock, Runner } from "./run.ts";
 
 export type BudgetLimits = { readonly wallMinutes?: number | null; readonly tokens?: number | null; readonly costUsd?: number | null };
 export type Usage = { readonly tokens: number | null; readonly costUsd: number | null };
-export type UsageSnapshot = Usage & { readonly key: string; readonly at: string };
+export type UsageSnapshot = Usage & { readonly key: string; readonly at: string; readonly final?: true };
 export type SupervisedLane = Lane & { readonly activityPaths?: readonly string[]; readonly budget?: BudgetLimits };
 export type SupervisionOptions = {
   readonly hungAfterMinutes?: number;
@@ -95,11 +95,18 @@ export class Supervision {
     }
     const snapshot = { key: lane.key, at: new Date(now).toISOString(), ...usage };
     // Without a usage hook every sweep would append the same unknown reading; close still records its final one.
-    if (!persist) return snapshot;
-    const path = join(dirname(this.reports.path(lane.key)), "cost.jsonl");
+    if (persist) this.record(snapshot);
+    return snapshot;
+  }
+
+  private costPath(key: string): string {
+    return join(dirname(this.reports.path(key)), "cost.jsonl");
+  }
+
+  private record(snapshot: UsageSnapshot): void {
+    const path = this.costPath(snapshot.key);
     mkdirSync(dirname(path), { recursive: true });
     appendFileSync(path, `${JSON.stringify(snapshot)}\n`, { mode: 0o600 });
-    return snapshot;
   }
 
   private async activity(lane: SupervisedLane): Promise<string> {
@@ -204,14 +211,26 @@ export class Supervision {
 
   async close(lane: SupervisedLane): Promise<UsageSnapshot | null> {
     if (!this.enabled(lane)) return null;
-    const snapshot = await this.usage(lane, this.deps.clock.now(), true);
+    // A close that already recorded its final reading (a retried or second close) returns it and runs no hook, so a
+    // cost ledger gets each lane once. {closeKey} is the same on every attempt, for a ledger that dedupes on it.
+    const path = this.costPath(lane.key);
+    const recorded = existsSync(path) ? readFileSync(path, "utf8").split("\n").filter((line) => line.trim())
+      .map((line) => JSON.parse(line) as UsageSnapshot).findLast((entry) => entry.final === true) : undefined;
+    if (recorded) return recorded;
+    const snapshot = await this.usage(lane, this.deps.clock.now(), false);
     if (this.options.recordCostArgv?.length && (snapshot.tokens !== null || snapshot.costUsd !== null)) {
       const result = await this.deps.run(fill(this.options.recordCostArgv, {
         key: lane.key, session: lane.session ?? "", tokens: snapshot.tokens === null ? "null" : String(snapshot.tokens),
-        costUsd: snapshot.costUsd === null ? "null" : String(snapshot.costUsd), at: snapshot.at,
+        costUsd: snapshot.costUsd === null ? "null" : String(snapshot.costUsd), at: snapshot.at, closeKey: `${lane.key}@${lane.openedAt}`,
       }), { cwd: lane.cwd, timeoutMs: 10_000 });
-      if (result.code !== 0) throw new Error(`recordCost failed for ${lane.key}: ${result.err}`);
+      if (result.code !== 0) {
+        // Kept as a plain reading, so the next close takes a new one and runs the hook again.
+        this.record(snapshot);
+        throw new Error(`recordCost failed for ${lane.key}: ${result.err}`);
+      }
     }
-    return snapshot;
+    const final: UsageSnapshot = { ...snapshot, final: true };
+    this.record(final);
+    return final;
   }
 }

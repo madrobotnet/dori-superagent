@@ -206,6 +206,18 @@ describe("supervision", () => {
     } finally { f.done(); }
   });
 
+  test("a second close keeps the first final reading and runs the cost hook once, with a stable close key", async () => {
+    const f = fixture({ usageArgv: ["usage"], recordCostArgv: ["record", "{closeKey}", "{tokens}"] });
+    try {
+      f.setUsage('{"tokens":1234,"costUsd":0.25}');
+      const first = await f.supervisor.close(lane);
+      f.setUsage('{"tokens":9999,"costUsd":9}');
+      f.clock.at += 60_000;
+      expect(await new Supervision(f.deps, f.supervisor.options).close(lane)).toEqual(first);
+      expect(f.calls.filter((args) => args[0] === "record")).toEqual([["record", `${lane.key}@${lane.openedAt}`, "1234"]]);
+    } finally { f.done(); }
+  });
+
   test("terminal progress is not overwritten by budget or hung reports", async () => {
     const f = fixture({ defaults: { wallMinutes: 0 } });
     try {
