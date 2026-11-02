@@ -1,0 +1,274 @@
+{
+  "repo": "acme/app",
+  "number": 3,
+  "body": "## Summary\n\n- Keep drafts while saving.\n- Retain tables across scrolling.",
+  "head": "0e527d7286a467b07a4176d3c1b9b5ea67a730cf",
+  "commits": [
+    {
+      "sha": "d078c39d5ef1469d568e7b5fd8bcd76652d5887a",
+      "commit": {
+        "message": "fix(drafts): keep drafts and separate reads from creation",
+        "author": {
+          "name": "Example Dev",
+          "email": "12345+example@users.noreply.github.com"
+        },
+        "committer": {
+          "name": "Example Dev",
+          "email": "12345+example@users.noreply.github.com"
+        }
+      },
+      "files": [
+        {
+          "filename": "src/features/capture/CaptureDialog.tsx",
+          "status": "modified"
+        },
+        {
+          "filename": "src/features/capture/CaptureDialog.test.tsx",
+          "status": "modified",
+          "patch": "@@ -0,0 +1,6 @@\n+import { render, screen, waitFor } from \"@testing-library/react\";\n+test(\"keeps the draft\", async () => {\n+  render(<View />);\n+  await waitFor(() => expect(screen.getByRole(\"button\")).toBeEnabled());\n+});"
+        },
+        {
+          "filename": "src/features/inbox/drafts.ts",
+          "status": "added"
+        },
+        {
+          "filename": "src/features/inbox/triage.test.ts",
+          "status": "modified",
+          "patch": "@@ -0,0 +1,3 @@\n+test(\"triage\", () => {\n+  expect(parse(\"a\")).toEqual([\"a\"]);\n+});"
+        },
+        {
+          "filename": "src/server/notes/service.test.ts",
+          "status": "modified",
+          "patch": "@@ -0,0 +1,3 @@\n+test(\"service\", () => {\n+  expect(parse(\"a\")).toEqual([\"a\"]);\n+});"
+        }
+      ],
+      "parents": [
+        {
+          "sha": "0824416fb71d85385a9ed8429dfa20e6395d9376"
+        }
+      ]
+    },
+    {
+      "sha": "da3c9c719710baba5c7f9f370323efb0b40507bd",
+      "commit": {
+        "message": "fix(capture): retain the dialog while saving",
+        "author": {
+          "name": "Example Dev",
+          "email": "12345+example@users.noreply.github.com"
+        },
+        "committer": {
+          "name": "Example Dev",
+          "email": "12345+example@users.noreply.github.com"
+        }
+      },
+      "files": [
+        {
+          "filename": "src/features/capture/CaptureDialog.tsx",
+          "status": "modified"
+        }
+      ],
+      "parents": [
+        {
+          "sha": "d078c39d5ef1469d568e7b5fd8bcd76652d5887a"
+        }
+      ]
+    },
+    {
+      "sha": "32df85a6bfa0291bcc46e5e2e00a5446c5610d8d",
+      "commit": {
+        "message": "test(capture): cover a pending cancel",
+        "author": {
+          "name": "Example Dev",
+          "email": "12345+example@users.noreply.github.com"
+        },
+        "committer": {
+          "name": "Example Dev",
+          "email": "12345+example@users.noreply.github.com"
+        }
+      },
+      "files": [
+        {
+          "filename": "src/features/capture/CaptureDialog.test.tsx",
+          "status": "modified",
+          "patch": "@@ -0,0 +1,6 @@\n+import { render, screen, waitFor } from \"@testing-library/react\";\n+test(\"pending cancel\", async () => {\n+  render(<View />);\n+  await waitFor(() => expect(screen.getByRole(\"button\")).toBeEnabled());\n+});"
+        }
+      ],
+      "parents": [
+        {
+          "sha": "da3c9c719710baba5c7f9f370323efb0b40507bd"
+        }
+      ]
+    },
+    {
+      "sha": "d88f66cede9d297bd350e3fcd87c4dbb490016b8",
+      "commit": {
+        "message": "fix(editor): retain tables across scrolling",
+        "author": {
+          "name": "Example Dev",
+          "email": "12345+example@users.noreply.github.com"
+        },
+        "committer": {
+          "name": "Example Dev",
+          "email": "12345+example@users.noreply.github.com"
+        }
+      },
+      "files": [
+        {
+          "filename": "src/features/notes/tables.ts",
+          "status": "modified"
+        },
+        {
+          "filename": "src/features/notes/tables.test.ts",
+          "status": "modified",
+          "patch": "@@ -0,0 +1,3 @@\n+test(\"tables\", () => {\n+  expect(parse(\"a\")).toEqual([\"a\"]);\n+});"
+        }
+      ],
+      "parents": [
+        {
+          "sha": "32df85a6bfa0291bcc46e5e2e00a5446c5610d8d"
+        }
+      ]
+    },
+    {
+      "sha": "c97a30c6f8f10da17015331391a09aaa20268550",
+      "commit": {
+        "message": "fix(inbox): retain snooze ownership while saving",
+        "author": {
+          "name": "Example Dev",
+          "email": "12345+example@users.noreply.github.com"
+        },
+        "committer": {
+          "name": "Example Dev",
+          "email": "12345+example@users.noreply.github.com"
+        }
+      },
+      "files": [
+        {
+          "filename": "src/features/inbox/SnoozeSheet.tsx",
+          "status": "modified"
+        },
+        {
+          "filename": "src/features/inbox/SnoozeSheet.test.tsx",
+          "status": "added",
+          "patch": "@@ -0,0 +1,6 @@\n+import { render, screen, waitFor } from \"@testing-library/react\";\n+test(\"snooze\", async () => {\n+  render(<View />);\n+  await waitFor(() => expect(screen.getByRole(\"button\")).toBeEnabled());\n+});"
+        }
+      ],
+      "parents": [
+        {
+          "sha": "d88f66cede9d297bd350e3fcd87c4dbb490016b8"
+        }
+      ]
+    },
+    {
+      "sha": "64f6fb29763446936a9169051657016f8c3a44be",
+      "commit": {
+        "message": "fix(notes): tighten the tag filter boundary",
+        "author": {
+          "name": "Example Dev",
+          "email": "12345+example@users.noreply.github.com"
+        },
+        "committer": {
+          "name": "Example Dev",
+          "email": "12345+example@users.noreply.github.com"
+        }
+      },
+      "files": [
+        {
+          "filename": "src/features/notes/NoteList.tsx",
+          "status": "modified"
+        }
+      ],
+      "parents": [
+        {
+          "sha": "c97a30c6f8f10da17015331391a09aaa20268550"
+        }
+      ]
+    },
+    {
+      "sha": "0e527d7286a467b07a4176d3c1b9b5ea67a730cf",
+      "commit": {
+        "message": "fix(notes): one page heading for the selected note",
+        "author": {
+          "name": "Example Dev",
+          "email": "12345+example@users.noreply.github.com"
+        },
+        "committer": {
+          "name": "Example Dev",
+          "email": "12345+example@users.noreply.github.com"
+        }
+      },
+      "files": [
+        {
+          "filename": "src/features/notes/NoteDetail.tsx",
+          "status": "modified"
+        },
+        {
+          "filename": "src/features/notes/headings.test.tsx",
+          "status": "added",
+          "patch": "@@ -0,0 +1,6 @@\n+import { render, screen, waitFor } from \"@testing-library/react\";\n+test(\"one heading\", async () => {\n+  render(<View />);\n+  await waitFor(() => expect(screen.getByRole(\"button\")).toBeEnabled());\n+});"
+        }
+      ],
+      "parents": [
+        {
+          "sha": "64f6fb29763446936a9169051657016f8c3a44be"
+        }
+      ]
+    }
+  ],
+  "files": [
+    {
+      "filename": "src/features/capture/CaptureDialog.test.tsx",
+      "status": "modified",
+      "patch": "@@ -0,0 +1,6 @@\n+import { render, screen, waitFor } from \"@testing-library/react\";\n+test(\"pending cancel\", async () => {\n+  render(<View />);\n+  await waitFor(() => expect(screen.getByRole(\"button\")).toBeEnabled());\n+});"
+    },
+    {
+      "filename": "src/features/capture/CaptureDialog.tsx",
+      "status": "modified"
+    },
+    {
+      "filename": "src/features/inbox/drafts.ts",
+      "status": "added"
+    },
+    {
+      "filename": "src/features/inbox/SnoozeSheet.test.tsx",
+      "status": "added",
+      "patch": "@@ -0,0 +1,6 @@\n+import { render, screen, waitFor } from \"@testing-library/react\";\n+test(\"snooze\", async () => {\n+  render(<View />);\n+  await waitFor(() => expect(screen.getByRole(\"button\")).toBeEnabled());\n+});"
+    },
+    {
+      "filename": "src/features/inbox/SnoozeSheet.tsx",
+      "status": "modified"
+    },
+    {
+      "filename": "src/features/inbox/triage.test.ts",
+      "status": "modified",
+      "patch": "@@ -0,0 +1,3 @@\n+test(\"triage\", () => {\n+  expect(parse(\"a\")).toEqual([\"a\"]);\n+});"
+    },
+    {
+      "filename": "src/features/notes/headings.test.tsx",
+      "status": "added",
+      "patch": "@@ -0,0 +1,6 @@\n+import { render, screen, waitFor } from \"@testing-library/react\";\n+test(\"one heading\", async () => {\n+  render(<View />);\n+  await waitFor(() => expect(screen.getByRole(\"button\")).toBeEnabled());\n+});"
+    },
+    {
+      "filename": "src/features/notes/NoteDetail.tsx",
+      "status": "modified"
+    },
+    {
+      "filename": "src/features/notes/NoteList.tsx",
+      "status": "modified"
+    },
+    {
+      "filename": "src/features/notes/tables.test.ts",
+      "status": "modified",
+      "patch": "@@ -0,0 +1,3 @@\n+test(\"tables\", () => {\n+  expect(parse(\"a\")).toEqual([\"a\"]);\n+});"
+    },
+    {
+      "filename": "src/features/notes/tables.ts",
+      "status": "modified"
+    },
+    {
+      "filename": "src/server/notes/service.test.ts",
+      "status": "modified",
+      "patch": "@@ -0,0 +1,3 @@\n+test(\"service\", () => {\n+  expect(parse(\"a\")).toEqual([\"a\"]);\n+});"
+    }
+  ]
+}

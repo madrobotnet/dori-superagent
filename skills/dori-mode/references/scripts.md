@@ -34,6 +34,7 @@ Needs: bun 1.3+, herdr, git, and the GitHub CLI (`gh`) for `merged`/`closed` sig
 | `guard` | load 150/80, 20% memory, 50 GB disk, 20 panes | `guard` |
 | `hooks.threadReply`, `hooks.threadDone` | none | `freshness`, `close` |
 | `hooks.transcribe` | none | `transcribe` (argv with `{file}`, prints the text) |
+| `repoIdentities` | none | `verify-pr`, `launch` footer: expected Git name and email per `owner/repo` (keys match without case) |
 
 Hooks are argv templates for your messenger CLI. `{thread}`, `{text}` and `{key}` are filled into each argument separately, so the text stays one argument whatever it contains.
 
@@ -77,6 +78,13 @@ Run by the lead after a restart or a compaction, before it trusts what it rememb
 - `CLEANUP <keys> match=<key>:<field>:<pane|key> ...` and `STOP in the owner session only: kill_bash(...)` for persistent watches tied only to finished lanes (closed, verified done, or a `done` report). A watch is tied to a lane only by the lane's pane id, or its key, as a whole argv token of the watch's `command` or `target`; a description is prose and a path segment is not the lane, so a lane keyed `docs` never claims `CI for the docs site` or `tail -F build/docs/out.log`. `match=` names the field that tied it. A watch that mentions an open lane anywhere (description and paths included) is kept. It reads the terminal metadata in `<sessionsDir>/*/extensions/terminal` and the current session's (`PI_SESSION_DIR`, `PI_SESSION_FILE`). Only the session that owns a watch can stop it. Live watches are listed first, then delivery-paused ones (`deliveryPaused=true`, still running, so they still get a stop call). A watch past its `expiresAt` has ended on its own and is listed as `EXPIRED <keys> ... ; nothing to stop`. The metadata path is shell-quoted. A metadata file that cannot be read or parsed is printed as `MONITORS unreadable <path>` and skipped; the other files are still read.
 
 Exit 0 ends with `BOOT checked`. A lane file that cannot be read or parsed, or a lanes path that cannot be listed, is `REGISTRY unreadable <path>`; the other lanes are still checked. Any input that could not be read (Slack, the registry, panes, a journal, metadata) is printed and gives `BOOT incomplete`, exit 1.
+
+### `dori verify-pr <owner/repo> <num> [--loop N] [--cwd DIR]`
+Run before a lane claims PR work done. It reads the PR through `gh api` (the PR, every commit with all of its files, the PR's files, then the PR again) and checks:
+- every commit's author and committer email is the one in `repoIdentities` for that repo. The name may differ. `noreply@github.com` is accepted only as the committer of a merge commit. A repo with no configured identity, or one whose `name` or `email` is not a nonempty string, fails before anything is read;
+- a PR with `fix(<scope>):` commits (a bare `fix:` is not matched) that touch source changes at least one test. A test file counts only when added, modified, renamed or copied; fixtures, helpers, fakes, mocks, snapshots and setup files (`setup`, `conftest`, `test-utils`) do not. A body line `No test: <reason>` waives this. A fix commit without its own test is a warning, since its test may be in a later commit.
+
+If the head, body or commit count changed between the two reads, or GitHub's answer is incomplete, the result is `FAIL`. Each `gh api` call is killed after 120 seconds, which is also a `FAIL`. Changed UI tests (`.tsx`/`.jsx`, a `ui`, `component(s)`, `feature(s)`, `e2e`, `browser` or `playwright` directory, or DOM calls in the patch) are listed with a shell loop that runs them `--loop` times (default 20) at the reported head. dori never runs the loop. `PASS` exits 0, `FAIL` exits 2.
 
 ### `dori claim-done [<key>] --evidence TEXT` / `dori object-done <key> --reason TEXT ...`
 The two halves of the done flow. Both message the lane's pane and check that Enter registered.

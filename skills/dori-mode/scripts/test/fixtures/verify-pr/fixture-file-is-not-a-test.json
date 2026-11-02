@@ -1,0 +1,190 @@
+{
+  "repo": "acme/app",
+  "number": 5,
+  "body": "## Summary\n\nSettings failures stay useful; focus returns after a row is removed.",
+  "head": "ab9e2e1e00ceba7553f80c36591620324965aaef",
+  "commits": [
+    {
+      "sha": "1b03865693d4f2791ae388cf30b6143538f82c7b",
+      "commit": {
+        "message": "fix(settings): keep confirmation and offline recovery",
+        "author": {
+          "name": "Example Dev",
+          "email": "12345+example@users.noreply.github.com"
+        },
+        "committer": {
+          "name": "Example Dev",
+          "email": "12345+example@users.noreply.github.com"
+        }
+      },
+      "files": [
+        {
+          "filename": "DESIGN.md",
+          "status": "modified"
+        },
+        {
+          "filename": "public/sw.js",
+          "status": "modified"
+        },
+        {
+          "filename": "src/features/settings/Templates.tsx",
+          "status": "modified"
+        },
+        {
+          "filename": "src/features/settings/Settings.test.tsx",
+          "status": "modified",
+          "patch": "@@ -0,0 +1,6 @@\n+import { render, screen, waitFor } from \"@testing-library/react\";\n+test(\"settings\", async () => {\n+  render(<View />);\n+  await waitFor(() => expect(screen.getByRole(\"button\")).toBeEnabled());\n+});"
+        },
+        {
+          "filename": "src/lib/offline.test.js",
+          "status": "modified",
+          "patch": "@@ -0,0 +1,3 @@\n+test(\"offline\", () => {\n+  expect(parse(\"a\")).toEqual([\"a\"]);\n+});"
+        },
+        {
+          "filename": "src/proxy.ts",
+          "status": "modified"
+        },
+        {
+          "filename": "src/proxy.test.ts",
+          "status": "modified",
+          "patch": "@@ -0,0 +1,3 @@\n+test(\"proxy\", () => {\n+  expect(parse(\"a\")).toEqual([\"a\"]);\n+});"
+        }
+      ],
+      "parents": [
+        {
+          "sha": "2cfc243897625fcb9c2414ad7f4b195935f1b60e"
+        }
+      ]
+    },
+    {
+      "sha": "34de82b620bdb71081deebe09ad71a5245c324c2",
+      "commit": {
+        "message": "fix(settings): restore focus after row removal",
+        "author": {
+          "name": "Example Dev",
+          "email": "12345+example@users.noreply.github.com"
+        },
+        "committer": {
+          "name": "Example Dev",
+          "email": "12345+example@users.noreply.github.com"
+        }
+      },
+      "files": [
+        {
+          "filename": "src/features/settings/Templates.tsx",
+          "status": "modified"
+        }
+      ],
+      "parents": [
+        {
+          "sha": "1b03865693d4f2791ae388cf30b6143538f82c7b"
+        }
+      ]
+    },
+    {
+      "sha": "9852a26a5bd8eef7fa8d38cb71de2337a8287247",
+      "commit": {
+        "message": "test(settings): cover delayed focus recovery",
+        "author": {
+          "name": "Example Dev",
+          "email": "12345+example@users.noreply.github.com"
+        },
+        "committer": {
+          "name": "Example Dev",
+          "email": "12345+example@users.noreply.github.com"
+        }
+      },
+      "files": [
+        {
+          "filename": "src/features/settings/Templates.fixture.tsx",
+          "status": "added"
+        },
+        {
+          "filename": "src/features/settings/Templates.test.ts",
+          "status": "added",
+          "patch": "@@ -1,4 +1,6 @@\n+const view = new Bun.WebView();\n+await view.navigate(\"about:blank\");\n+await page.goto(fixtureUrl);\n+await waitFor(() => document.activeElement?.id === \"row-2\");"
+        }
+      ],
+      "parents": [
+        {
+          "sha": "34de82b620bdb71081deebe09ad71a5245c324c2"
+        }
+      ]
+    },
+    {
+      "sha": "ab9e2e1e00ceba7553f80c36591620324965aaef",
+      "commit": {
+        "message": "fix(sharing): bound the reading width",
+        "author": {
+          "name": "Example Dev",
+          "email": "12345+example@users.noreply.github.com"
+        },
+        "committer": {
+          "name": "Example Dev",
+          "email": "12345+example@users.noreply.github.com"
+        }
+      },
+      "files": [
+        {
+          "filename": "DESIGN.md",
+          "status": "modified"
+        },
+        {
+          "filename": "src/server/shares/public.ts",
+          "status": "modified"
+        }
+      ],
+      "parents": [
+        {
+          "sha": "9852a26a5bd8eef7fa8d38cb71de2337a8287247"
+        }
+      ]
+    }
+  ],
+  "files": [
+    {
+      "filename": "DESIGN.md",
+      "status": "modified"
+    },
+    {
+      "filename": "public/sw.js",
+      "status": "modified"
+    },
+    {
+      "filename": "src/features/settings/Settings.test.tsx",
+      "status": "modified",
+      "patch": "@@ -0,0 +1,6 @@\n+import { render, screen, waitFor } from \"@testing-library/react\";\n+test(\"settings\", async () => {\n+  render(<View />);\n+  await waitFor(() => expect(screen.getByRole(\"button\")).toBeEnabled());\n+});"
+    },
+    {
+      "filename": "src/features/settings/Templates.fixture.tsx",
+      "status": "added"
+    },
+    {
+      "filename": "src/features/settings/Templates.test.ts",
+      "status": "added",
+      "patch": "@@ -1,4 +1,6 @@\n+const view = new Bun.WebView();\n+await view.navigate(\"about:blank\");\n+await page.goto(fixtureUrl);\n+await waitFor(() => document.activeElement?.id === \"row-2\");"
+    },
+    {
+      "filename": "src/features/settings/Templates.tsx",
+      "status": "modified"
+    },
+    {
+      "filename": "src/lib/offline.test.js",
+      "status": "modified",
+      "patch": "@@ -0,0 +1,3 @@\n+test(\"offline\", () => {\n+  expect(parse(\"a\")).toEqual([\"a\"]);\n+});"
+    },
+    {
+      "filename": "src/proxy.test.ts",
+      "status": "modified",
+      "patch": "@@ -0,0 +1,3 @@\n+test(\"proxy\", () => {\n+  expect(parse(\"a\")).toEqual([\"a\"]);\n+});"
+    },
+    {
+      "filename": "src/proxy.ts",
+      "status": "modified"
+    },
+    {
+      "filename": "src/server/shares/public.ts",
+      "status": "modified"
+    }
+  ]
+}

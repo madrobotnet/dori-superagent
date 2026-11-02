@@ -1,0 +1,39 @@
+{
+  "repo": "acme/app",
+  "number": 9,
+  "body": "Source-only fix with no test waiver.",
+  "head": "dc55bb6b1dee33f974aa5cec5a462936d60ad106",
+  "commits": [
+    {
+      "sha": "dc55bb6b1dee33f974aa5cec5a462936d60ad106",
+      "commit": {
+        "message": "fix(ui): preserve pending work",
+        "author": {
+          "name": "Example Dev",
+          "email": "12345+example@users.noreply.github.com"
+        },
+        "committer": {
+          "name": "Example Dev",
+          "email": "12345+example@users.noreply.github.com"
+        }
+      },
+      "files": [
+        {
+          "filename": "src/features/Dialog.tsx",
+          "status": "modified"
+        }
+      ],
+      "parents": [
+        {
+          "sha": "799488360cb71a414728ca4eccbbcd8b120f0d16"
+        }
+      ]
+    }
+  ],
+  "files": [
+    {
+      "filename": "src/features/Dialog.tsx",
+      "status": "modified"
+    }
+  ]
+}

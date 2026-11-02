@@ -1,0 +1,57 @@
+{
+  "repo": "acme/app",
+  "number": 1,
+  "body": "## Summary\n\nGuard form submission before the client handler is attached.",
+  "head": "9e5a6d49bfc1d7acb9b563e8a170b4dbf2a105ec",
+  "commits": [
+    {
+      "sha": "9e5a6d49bfc1d7acb9b563e8a170b4dbf2a105ec",
+      "commit": {
+        "message": "fix(form): guard submission before hydration",
+        "author": {
+          "name": "Example Dev",
+          "email": "12345+example@users.noreply.github.com"
+        },
+        "committer": {
+          "name": "Example Dev",
+          "email": "12345+example@users.noreply.github.com"
+        }
+      },
+      "files": [
+        {
+          "filename": "src/features/form/Fields.tsx",
+          "status": "added"
+        },
+        {
+          "filename": "src/features/form/Form.test.tsx",
+          "status": "added",
+          "patch": "@@ -0,0 +1,6 @@\n+import { render, screen, waitFor } from \"@testing-library/react\";\n+test(\"submits once\", async () => {\n+  render(<View />);\n+  await waitFor(() => expect(screen.getByRole(\"button\")).toBeEnabled());\n+});"
+        },
+        {
+          "filename": "src/features/form/Form.tsx",
+          "status": "modified"
+        }
+      ],
+      "parents": [
+        {
+          "sha": "700134726669965a0c6dfd42804b6074307e0396"
+        }
+      ]
+    }
+  ],
+  "files": [
+    {
+      "filename": "src/features/form/Fields.tsx",
+      "status": "added"
+    },
+    {
+      "filename": "src/features/form/Form.test.tsx",
+      "status": "added",
+      "patch": "@@ -0,0 +1,6 @@\n+import { render, screen, waitFor } from \"@testing-library/react\";\n+test(\"submits once\", async () => {\n+  render(<View />);\n+  await waitFor(() => expect(screen.getByRole(\"button\")).toBeEnabled());\n+});"
+    },
+    {
+      "filename": "src/features/form/Form.tsx",
+      "status": "modified"
+    }
+  ]
+}

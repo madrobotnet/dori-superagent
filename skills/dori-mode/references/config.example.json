@@ -19,6 +19,12 @@
   "nudgeAfterMin": 15,
   "postAfterMin": 20,
   "closeAfterMin": 5,
+  "repoIdentities": {
+    "my-org/my-project": {
+      "name": "Your Name",
+      "email": "12345+you@users.noreply.github.com"
+    }
+  },
   "heavySlots": 1,
   "heavyMaxLoad": 80,
   "deadPanePatterns": [

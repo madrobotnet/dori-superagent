@@ -1,6 +1,8 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
 
+import type { CommitIdentity } from "./verify-pr.ts";
+
 export type ArgvTemplate = readonly string[];
 
 export type Hooks = {
@@ -36,6 +38,8 @@ export type DoriConfig = {
   readonly deadPanePatterns: readonly string[];
   readonly guard: GuardThresholds;
   readonly hooks: Hooks;
+  /** Expected Git author and committer per lowercase `owner/repo`, for `verify-pr` and the lane footer. */
+  readonly repoIdentities: Readonly<Record<string, CommitIdentity>>;
 };
 
 export const defaultConfig = (home = homedir()): DoriConfig => ({
@@ -57,6 +61,7 @@ export const defaultConfig = (home = homedir()): DoriConfig => ({
   deadPanePatterns: ["has stopped", "no suitable jobs"],
   guard: { loadAlert: 150, loadOk: 80, memFreeMinPct: 20, diskFreeMinGb: 50, panesMax: 20 },
   hooks: {},
+  repoIdentities: {},
 });
 
 export const configPath = (): string => process.env.DORI_CONFIG ?? join(homedir(), ".dori", "config.json");
@@ -67,7 +72,7 @@ export const loadConfig = async (path = configPath(), home = homedir()): Promise
   const base = defaultConfig(home);
   const file = Bun.file(path);
   const raw = (await file.exists()) ? ((await file.json()) as Partial<DoriConfig>) : {};
-  const merged: DoriConfig = { ...base, ...raw, guard: { ...base.guard, ...raw.guard }, hooks: { ...base.hooks, ...raw.hooks } };
+  const merged: DoriConfig = { ...base, ...raw, guard: { ...base.guard, ...raw.guard }, hooks: { ...base.hooks, ...raw.hooks }, repoIdentities: Object.fromEntries(Object.entries(raw.repoIdentities ?? {}).map(([repo, identity]) => [repo.toLowerCase(), identity])) };
   return {
     ...merged,
     stateDir: expandHome(process.env.DORI_STATE_DIR ?? merged.stateDir, home),

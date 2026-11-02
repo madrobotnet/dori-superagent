@@ -1,0 +1,120 @@
+{
+  "repo": "acme/app",
+  "number": 2,
+  "body": "## Summary\n\nClearer control boundaries and focus rings.",
+  "head": "073ed20bfc36dd44730f6369982b29c26b7d7b4d",
+  "commits": [
+    {
+      "sha": "44ed364c90bbc6f9be8eea73c62caa5040cc0934",
+      "commit": {
+        "message": "fix(ui): separate control boundaries from dividers",
+        "author": {
+          "name": "Example Dev",
+          "email": "12345+example@users.noreply.github.com"
+        },
+        "committer": {
+          "name": "Example Dev",
+          "email": "12345+example@users.noreply.github.com"
+        }
+      },
+      "files": [
+        {
+          "filename": "DESIGN.md",
+          "status": "modified"
+        },
+        {
+          "filename": "src/app/globals.css",
+          "status": "modified"
+        },
+        {
+          "filename": "src/components/ui/Button.tsx",
+          "status": "modified"
+        },
+        {
+          "filename": "src/components/ui/contrast.test.ts",
+          "status": "modified",
+          "patch": "@@ -0,0 +1,3 @@\n+test(\"contrast\", () => {\n+  expect(parse(\"a\")).toEqual([\"a\"]);\n+});"
+        },
+        {
+          "filename": "src/components/ui/toast.ts",
+          "status": "added"
+        },
+        {
+          "filename": "src/components/ui/toast.test.ts",
+          "status": "added",
+          "patch": "@@ -0,0 +1,3 @@\n+test(\"toast lifecycle\", () => {\n+  expect(parse(\"a\")).toEqual([\"a\"]);\n+});"
+        },
+        {
+          "filename": "src/features/auth/LoginForm.tsx",
+          "status": "modified"
+        }
+      ],
+      "parents": [
+        {
+          "sha": "c1ffc96bef39f32722049847bd2b755c59b9148a"
+        }
+      ]
+    },
+    {
+      "sha": "073ed20bfc36dd44730f6369982b29c26b7d7b4d",
+      "commit": {
+        "message": "fix(auth): keep the lockout phrase on one line",
+        "author": {
+          "name": "Example Dev",
+          "email": "12345+example@users.noreply.github.com"
+        },
+        "committer": {
+          "name": "Example Dev",
+          "email": "12345+example@users.noreply.github.com"
+        }
+      },
+      "files": [
+        {
+          "filename": "src/features/auth/login-copy.ts",
+          "status": "modified"
+        }
+      ],
+      "parents": [
+        {
+          "sha": "44ed364c90bbc6f9be8eea73c62caa5040cc0934"
+        }
+      ]
+    }
+  ],
+  "files": [
+    {
+      "filename": "DESIGN.md",
+      "status": "modified"
+    },
+    {
+      "filename": "src/app/globals.css",
+      "status": "modified"
+    },
+    {
+      "filename": "src/components/ui/Button.tsx",
+      "status": "modified"
+    },
+    {
+      "filename": "src/components/ui/contrast.test.ts",
+      "status": "modified",
+      "patch": "@@ -0,0 +1,3 @@\n+test(\"contrast\", () => {\n+  expect(parse(\"a\")).toEqual([\"a\"]);\n+});"
+    },
+    {
+      "filename": "src/components/ui/toast.test.ts",
+      "status": "added",
+      "patch": "@@ -0,0 +1,3 @@\n+test(\"toast lifecycle\", () => {\n+  expect(parse(\"a\")).toEqual([\"a\"]);\n+});"
+    },
+    {
+      "filename": "src/components/ui/toast.ts",
+      "status": "added"
+    },
+    {
+      "filename": "src/features/auth/login-copy.ts",
+      "status": "modified"
+    },
+    {
+      "filename": "src/features/auth/LoginForm.tsx",
+      "status": "modified"
+    }
+  ]
+}

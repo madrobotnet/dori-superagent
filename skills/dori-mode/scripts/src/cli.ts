@@ -25,6 +25,7 @@ import { Telegram } from "./messenger/telegram.ts";
 import { Discord, discordPresence } from "./messenger/discord.ts";
 import { realTimers } from "./messenger/typing.ts";
 import { transcribe, TranscriptionError } from "./messenger/voice.ts";
+import { formatVerifyPr, verifyPr } from "./verify-pr.ts";
 
 const USAGE = `dori <command> [options]
 
@@ -34,6 +35,8 @@ const USAGE = `dori <command> [options]
   boot                                 read-only check after a restart: Slack auth, vanished panes, journals, stale watches
   report <key> --kind milestone|blocker|question|halted|done --text TEXT
                                        append a durable progress report and print its [REPORT] line
+  verify-pr <owner/repo> <num> [--loop N] [--cwd DIR]
+                                       check every commit's author/committer email and PR-level tests; print the UI test loop (not run)
   claim-done [<key>] --evidence TEXT  key defaults to the lane registered for $HERDR_PANE_ID
   object-done <key> --reason TEXT [--reason TEXT ...]
   close  <key> [--note TEXT]           close now (Done signals must read back live)
@@ -136,6 +139,16 @@ try {
       });
       for (const line of r.lines) console.log(line);
       process.exit(r.exitCode);
+    }
+    case "verify-pr": {
+      const repo = key ?? die("verify-pr needs owner/repo and a PR number");
+      const result = await verifyPr(repo, Number(flags.positionals[1]), run, {
+        expectedIdentity: config.repoIdentities[repo.toLowerCase()],
+        loopCount: Number(opt("loop") ?? 20),
+        cwd: opt("cwd"),
+      });
+      console.log(formatVerifyPr(result));
+      process.exit(result.ok ? 0 : 2);
     }
     case "claim-done":
       console.log(await claimDone(deps, await lane(key), need("evidence")));

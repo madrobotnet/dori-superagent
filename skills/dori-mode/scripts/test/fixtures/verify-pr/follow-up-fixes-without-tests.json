@@ -1,0 +1,150 @@
+{
+  "repo": "acme/app",
+  "number": 4,
+  "body": "## Summary\n\nRoute titles, a skip target and modal ownership.",
+  "head": "dca14ce8a0deb22b5285412ae83d3251199b0e9c",
+  "commits": [
+    {
+      "sha": "1dcb40028fdf7a4372f2ed2c32abf86abddf4b78",
+      "commit": {
+        "message": "fix(navigation): preserve modal ownership",
+        "author": {
+          "name": "Example Dev",
+          "email": "12345+example@users.noreply.github.com"
+        },
+        "committer": {
+          "name": "Example Dev",
+          "email": "12345+example@users.noreply.github.com"
+        }
+      },
+      "files": [
+        {
+          "filename": "src/components/shell/AppShell.tsx",
+          "status": "modified"
+        },
+        {
+          "filename": "src/components/shell/Sidebar.test.tsx",
+          "status": "modified",
+          "patch": "@@ -0,0 +1,6 @@\n+import { render, screen, waitFor } from \"@testing-library/react\";\n+test(\"sidebar\", async () => {\n+  render(<View />);\n+  await waitFor(() => expect(screen.getByRole(\"button\")).toBeEnabled());\n+});"
+        },
+        {
+          "filename": "src/components/shell/theme.ts",
+          "status": "modified"
+        },
+        {
+          "filename": "src/components/shell/theme.test.ts",
+          "status": "modified",
+          "patch": "@@ -0,0 +1,3 @@\n+test(\"theme\", () => {\n+  expect(parse(\"a\")).toEqual([\"a\"]);\n+});"
+        }
+      ],
+      "parents": [
+        {
+          "sha": "410be0e67fd8c7ab0c8fa54c93efff3c88e9bcf7"
+        }
+      ]
+    },
+    {
+      "sha": "3cfbc91422314df20ac838bdaf5d611f78a838a2",
+      "commit": {
+        "message": "fix(navigation): restore active rail contrast",
+        "author": {
+          "name": "Example Dev",
+          "email": "12345+example@users.noreply.github.com"
+        },
+        "committer": {
+          "name": "Example Dev",
+          "email": "12345+example@users.noreply.github.com"
+        }
+      },
+      "files": [
+        {
+          "filename": "src/components/shell/Sidebar.tsx",
+          "status": "modified"
+        }
+      ],
+      "parents": [
+        {
+          "sha": "1dcb40028fdf7a4372f2ed2c32abf86abddf4b78"
+        }
+      ]
+    },
+    {
+      "sha": "bf0744f1696d99bd03de1d645accaf13edfde323",
+      "commit": {
+        "message": "fix(navigation): keep complete focus indicators",
+        "author": {
+          "name": "Example Dev",
+          "email": "12345+example@users.noreply.github.com"
+        },
+        "committer": {
+          "name": "Example Dev",
+          "email": "12345+example@users.noreply.github.com"
+        }
+      },
+      "files": [
+        {
+          "filename": "src/features/graph/Graph.tsx",
+          "status": "modified"
+        }
+      ],
+      "parents": [
+        {
+          "sha": "3cfbc91422314df20ac838bdaf5d611f78a838a2"
+        }
+      ]
+    },
+    {
+      "sha": "dca14ce8a0deb22b5285412ae83d3251199b0e9c",
+      "commit": {
+        "message": "fix(graph): keep controls clear of nodes",
+        "author": {
+          "name": "Example Dev",
+          "email": "12345+example@users.noreply.github.com"
+        },
+        "committer": {
+          "name": "Example Dev",
+          "email": "12345+example@users.noreply.github.com"
+        }
+      },
+      "files": [
+        {
+          "filename": "src/features/graph/Graph.tsx",
+          "status": "modified"
+        }
+      ],
+      "parents": [
+        {
+          "sha": "bf0744f1696d99bd03de1d645accaf13edfde323"
+        }
+      ]
+    }
+  ],
+  "files": [
+    {
+      "filename": "src/components/shell/AppShell.tsx",
+      "status": "modified"
+    },
+    {
+      "filename": "src/components/shell/Sidebar.test.tsx",
+      "status": "modified",
+      "patch": "@@ -0,0 +1,6 @@\n+import { render, screen, waitFor } from \"@testing-library/react\";\n+test(\"sidebar\", async () => {\n+  render(<View />);\n+  await waitFor(() => expect(screen.getByRole(\"button\")).toBeEnabled());\n+});"
+    },
+    {
+      "filename": "src/components/shell/Sidebar.tsx",
+      "status": "modified"
+    },
+    {
+      "filename": "src/components/shell/theme.test.ts",
+      "status": "modified",
+      "patch": "@@ -0,0 +1,3 @@\n+test(\"theme\", () => {\n+  expect(parse(\"a\")).toEqual([\"a\"]);\n+});"
+    },
+    {
+      "filename": "src/components/shell/theme.ts",
+      "status": "modified"
+    },
+    {
+      "filename": "src/features/graph/Graph.tsx",
+      "status": "modified"
+    }
+  ]
+}

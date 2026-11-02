@@ -1,0 +1,57 @@
+{
+  "repo": "acme/app",
+  "number": 6,
+  "body": "## Root cause\n\nThe pinned image and the rolling index disagree on a package version.",
+  "head": "3c8d19195944ad92fc605d4e43648afbbb6fd680",
+  "commits": [
+    {
+      "sha": "3c8d19195944ad92fc605d4e43648afbbb6fd680",
+      "commit": {
+        "message": "fix(release): pin sources to snapshots",
+        "author": {
+          "name": "agent",
+          "email": "agent@localhost"
+        },
+        "committer": {
+          "name": "agent",
+          "email": "agent@localhost"
+        }
+      },
+      "files": [
+        {
+          "filename": "Dockerfile",
+          "status": "modified"
+        },
+        {
+          "filename": "release/snapshot.test.mjs",
+          "status": "added",
+          "patch": "@@ -0,0 +1,3 @@\n+test(\"snapshot\", () => {\n+  expect(parse(\"a\")).toEqual([\"a\"]);\n+});"
+        },
+        {
+          "filename": "scripts/prepare.mjs",
+          "status": "modified"
+        }
+      ],
+      "parents": [
+        {
+          "sha": "e131ef86786253ac4afed1e6698f5878e10f7dab"
+        }
+      ]
+    }
+  ],
+  "files": [
+    {
+      "filename": "Dockerfile",
+      "status": "modified"
+    },
+    {
+      "filename": "release/snapshot.test.mjs",
+      "status": "added",
+      "patch": "@@ -0,0 +1,3 @@\n+test(\"snapshot\", () => {\n+  expect(parse(\"a\")).toEqual([\"a\"]);\n+});"
+    },
+    {
+      "filename": "scripts/prepare.mjs",
+      "status": "modified"
+    }
+  ]
+}

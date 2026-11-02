@@ -1,6 +1,6 @@
 import { fileURLToPath } from "node:url";
 
-import { fill } from "./config.ts";
+import { type DoriConfig, fill } from "./config.ts";
 import type { FlowDeps } from "./done-flow.ts";
 import { readScreen, statusLookup } from "./panes.ts";
 import { LANE_KEY, type Lane } from "./registry.ts";
@@ -35,12 +35,17 @@ export const shellQuote = (s: string): string => (/^[\w@%+=:,./-]+$/.test(s) ? s
 export const cliCommand = (path: string = fileURLToPath(new URL("./cli.ts", import.meta.url))): string => `bun ${shellQuote(path)}`;
 const CLI = cliCommand();
 
-export const footer = (lane: Lane, leadPane: string): string => [
+export const footer = (lane: Lane, leadPane: string, identities: DoriConfig["repoIdentities"] = {}): string => [
   "",
   "## Lane footer (written by dori launch)",
   `- Key: ${lane.key}. Work thread: ${lane.thread}.`,
   `- Done = ${lane.done}. The lane closes only when every signal reads back live.`,
   `- Persist each milestone, blocker, question, halt and completion with ${CLI} report ${lane.key} --kind milestone|blocker|question|halted|done --text "what, with evidence links". It appends reports.jsonl and prints the human [REPORT] line; send that line to pane ${leadPane || "(lead pane)"} as an argv array, never a shell string.`,
+  ...(Object.keys(identities).length ? [
+    "- Before committing, set the repository's identity below for that command only; never change the global Git identity. For a repository not listed, ask the lead for its identity before the first commit.",
+    ...Object.entries(identities).map(([repo, identity]) => `  - ${repo}: git -c user.name=${quoteForPane(identity.name)} -c user.email=${quoteForPane(identity.email)} commit ...`),
+  ] : []),
+  `- Before claiming PR work done, run ${CLI} verify-pr <owner/repo> <number>. A PR with source fix commits must change a test or carry a "No test: <reason>" line in its body; a fix commit without its own test is a warning. Run the printed UI test loop at the reported head before calling those tests stable.`,
   `- When done: ${CLI} claim-done ${lane.key} --evidence "<merge SHA, closed issue, version>". See references/done-protocol.md.`,
   "",
 ].join("\n");
@@ -59,7 +64,7 @@ export const launchLane = async (deps: FlowDeps, input: LaunchInput): Promise<{ 
   const briefFile = Bun.file(input.brief);
   if (!(await briefFile.exists())) throw new LaunchError(`brief not found: ${input.brief}`);
   const draft: Lane = { key: input.key, title: input.title, thread: input.thread ?? "none", brief: input.brief, done: input.done, cwd, model, openedAt: iso(deps.clock), reportProtocol: "jsonl-v1" };
-  await Bun.write(input.brief, `${(await briefFile.text()).replace(/\s*$/, "")}\n${footer(draft, deps.config.leadPane)}`);
+  await Bun.write(input.brief, `${(await briefFile.text()).replace(/\s*$/, "")}\n${footer(draft, deps.config.leadPane, deps.config.repoIdentities)}`);
   const created = await deps.run(["herdr", "tab", "create", ...(deps.config.laneWorkspace ? ["--workspace", deps.config.laneWorkspace] : []), "--cwd", cwd, "--label", input.key, "--no-focus"]);
   if (created.code !== 0) throw new LaunchError(`herdr tab create failed: ${created.err || created.out}`);
   const made = (JSON.parse(created.out) as { result: { root_pane: { pane_id: string; tab_id?: string }; tab_id?: string } }).result;

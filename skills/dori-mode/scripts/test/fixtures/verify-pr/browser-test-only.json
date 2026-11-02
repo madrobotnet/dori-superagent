@@ -1,0 +1,67 @@
+{
+  "repo": "acme/app",
+  "number": 8,
+  "body": "## Summary\n\nInitialize the browser before loading the fixture.",
+  "head": "94614bcbdf8aeafd3d3db775ead3514d5ddf0bbc",
+  "commits": [
+    {
+      "sha": "c2d46ed292f460ad1ed9b2b06ebee27bd7cb235c",
+      "commit": {
+        "message": "test(settings): name stalled focus phases",
+        "author": {
+          "name": "Example Dev",
+          "email": "12345+example@users.noreply.github.com"
+        },
+        "committer": {
+          "name": "Example Dev",
+          "email": "12345+example@users.noreply.github.com"
+        }
+      },
+      "files": [
+        {
+          "filename": "src/features/settings/Templates.test.ts",
+          "status": "modified",
+          "patch": "@@ -1,4 +1,6 @@\n+const view = new Bun.WebView();\n+await view.navigate(\"about:blank\");\n+await page.goto(fixtureUrl);\n+await waitFor(() => document.activeElement?.id === \"row-2\");"
+        }
+      ],
+      "parents": [
+        {
+          "sha": "c3b17402df122aab6bb80b8b109b219fb035dbbc"
+        }
+      ]
+    },
+    {
+      "sha": "94614bcbdf8aeafd3d3db775ead3514d5ddf0bbc",
+      "commit": {
+        "message": "test(settings): initialize the browser before navigation",
+        "author": {
+          "name": "Example Dev",
+          "email": "12345+example@users.noreply.github.com"
+        },
+        "committer": {
+          "name": "Example Dev",
+          "email": "12345+example@users.noreply.github.com"
+        }
+      },
+      "files": [
+        {
+          "filename": "src/features/settings/Templates.test.ts",
+          "status": "modified",
+          "patch": "@@ -1,4 +1,6 @@\n+const view = new Bun.WebView();\n+await view.navigate(\"about:blank\");\n+await page.goto(fixtureUrl);\n+await waitFor(() => document.activeElement?.id === \"row-2\");"
+        }
+      ],
+      "parents": [
+        {
+          "sha": "c2d46ed292f460ad1ed9b2b06ebee27bd7cb235c"
+        }
+      ]
+    }
+  ],
+  "files": [
+    {
+      "filename": "src/features/settings/Templates.test.ts",
+      "status": "modified",
+      "patch": "@@ -1,4 +1,6 @@\n+const view = new Bun.WebView();\n+await view.navigate(\"about:blank\");\n+await page.goto(fixtureUrl);\n+await waitFor(() => document.activeElement?.id === \"row-2\");"
+    }
+  ]
+}

@@ -1,0 +1,83 @@
+{
+  "repo": "acme/app",
+  "number": 7,
+  "body": "## Summary\n\nPrepare 1.2.1 from the merged fixes.",
+  "head": "7a4b9b0101606cf56314ccbbd4092f98966db7b2",
+  "commits": [
+    {
+      "sha": "7a4b9b0101606cf56314ccbbd4092f98966db7b2",
+      "commit": {
+        "message": "chore(release): prepare 1.2.1",
+        "author": {
+          "name": "Example Dev",
+          "email": "12345+example@users.noreply.github.com"
+        },
+        "committer": {
+          "name": "Example Dev",
+          "email": "12345+example@users.noreply.github.com"
+        }
+      },
+      "files": [
+        {
+          "filename": "CHANGELOG.md",
+          "status": "modified"
+        },
+        {
+          "filename": "Dockerfile",
+          "status": "modified"
+        },
+        {
+          "filename": "README.md",
+          "status": "modified"
+        },
+        {
+          "filename": "package.json",
+          "status": "modified"
+        },
+        {
+          "filename": "scripts/install.test.mjs",
+          "status": "modified",
+          "patch": "@@ -0,0 +1,3 @@\n+test(\"install\", () => {\n+  expect(parse(\"a\")).toEqual([\"a\"]);\n+});"
+        },
+        {
+          "filename": "src/server/setup/compose.test.ts",
+          "status": "modified",
+          "patch": "@@ -0,0 +1,3 @@\n+test(\"compose\", () => {\n+  expect(parse(\"a\")).toEqual([\"a\"]);\n+});"
+        }
+      ],
+      "parents": [
+        {
+          "sha": "e800ef00721c4d15a583dbe11942d96c542988b8"
+        }
+      ]
+    }
+  ],
+  "files": [
+    {
+      "filename": "CHANGELOG.md",
+      "status": "modified"
+    },
+    {
+      "filename": "Dockerfile",
+      "status": "modified"
+    },
+    {
+      "filename": "package.json",
+      "status": "modified"
+    },
+    {
+      "filename": "README.md",
+      "status": "modified"
+    },
+    {
+      "filename": "scripts/install.test.mjs",
+      "status": "modified",
+      "patch": "@@ -0,0 +1,3 @@\n+test(\"install\", () => {\n+  expect(parse(\"a\")).toEqual([\"a\"]);\n+});"
+    },
+    {
+      "filename": "src/server/setup/compose.test.ts",
+      "status": "modified",
+      "patch": "@@ -0,0 +1,3 @@\n+test(\"compose\", () => {\n+  expect(parse(\"a\")).toEqual([\"a\"]);\n+});"
+    }
+  ]
+}
