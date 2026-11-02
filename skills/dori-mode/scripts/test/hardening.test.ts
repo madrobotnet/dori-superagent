@@ -106,6 +106,25 @@ test("config rejects invalid ceilings and retains defaults when only one is over
   } finally { state.done(); }
 });
 
+test("config with a malformed supervision entry fails with a named error, not a TypeError", async () => {
+  const state = withState();
+  try {
+    const path = join(state.dir, "config.json");
+    for (const [supervision, message] of [
+      [{ lanes: { a: null } }, "invalid supervision lanes.a"],
+      [{ lanes: [] }, "invalid supervision lanes"],
+      [{ usageArgv: "usage {key}" }, "invalid supervision usageArgv"],
+      [{ recordCostArgv: ["record", 1] }, "invalid supervision recordCostArgv"],
+      [{ activityPaths: "src" }, "invalid supervision activityPaths"],
+      [{ gitActivity: "no" }, "invalid supervision gitActivity"],
+      ["off", "invalid supervision"],
+    ] as const) {
+      writeFileSync(path, JSON.stringify({ supervision }));
+      await expect(loadConfig(path)).rejects.toThrow(message);
+    }
+  } finally { state.done(); }
+});
+
 test("authorized close records known cost and keeps it in the lane journal", async () => {
   // Given live done signals and a configured read-only usage source.
   const state = withState();

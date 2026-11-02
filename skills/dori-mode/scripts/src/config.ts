@@ -81,10 +81,35 @@ const repoIdentities = (value: unknown): Record<string, CommitIdentity> =>
   typeof value !== "object" || value === null || Array.isArray(value) ? {}
     : Object.fromEntries(Object.entries(value).flatMap(([repo, identity]) => (isIdentity(identity) ? [[repo.toLowerCase(), identity]] : [])));
 
+export class ConfigError extends Error {}
+
+const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
+
+// A malformed supervision entry stops with its name: dropping it could turn a ceiling off, and keeping it would crash
+// every sweep later.
+const checkSupervision = (value: unknown): void => {
+  if (value === undefined) return;
+  if (!isRecord(value)) throw new ConfigError("invalid supervision: expected an object");
+  for (const name of ["defaults", "lanes"] as const) {
+    if (value[name] !== undefined && !isRecord(value[name])) throw new ConfigError(`invalid supervision ${name}: expected an object`);
+  }
+  for (const [key, budget] of Object.entries(isRecord(value.lanes) ? value.lanes : {})) {
+    if (!isRecord(budget)) throw new ConfigError(`invalid supervision lanes.${key}: expected an object`);
+  }
+  for (const name of ["usageArgv", "recordCostArgv", "activityPaths"] as const) {
+    const list = value[name];
+    if (list !== undefined && !(Array.isArray(list) && list.every((item) => typeof item === "string"))) {
+      throw new ConfigError(`invalid supervision ${name}: expected an array of strings`);
+    }
+  }
+  if (value.gitActivity !== undefined && typeof value.gitActivity !== "boolean") throw new ConfigError("invalid supervision gitActivity: expected true or false");
+};
+
 export const loadConfig = async (path = configPath(), home = homedir()): Promise<DoriConfig> => {
   const base = defaultConfig(home);
   const file = Bun.file(path);
   const raw = (await file.exists()) ? ((await file.json()) as Partial<DoriConfig>) : {};
+  checkSupervision(raw.supervision);
   const merged: DoriConfig = {
     ...base, ...raw, guard: { ...base.guard, ...raw.guard }, hooks: { ...base.hooks, ...raw.hooks }, repoIdentities: repoIdentities(raw.repoIdentities),
     supervision: { ...base.supervision, ...raw.supervision, defaults: { ...base.supervision.defaults, ...raw.supervision?.defaults } },
@@ -94,11 +119,11 @@ export const loadConfig = async (path = configPath(), home = homedir()): Promise
     staleAfterMinutes: merged.supervision.staleAfterMinutes,
     ...merged.supervision.defaults,
   })) {
-    if (value != null && (typeof value !== "number" || !Number.isFinite(value) || value < 0)) throw new Error(`invalid supervision ${name}: expected a nonnegative number or null`);
+    if (value != null && (typeof value !== "number" || !Number.isFinite(value) || value < 0)) throw new ConfigError(`invalid supervision ${name}: expected a nonnegative number or null`);
   }
   for (const [key, budget] of Object.entries(merged.supervision.lanes ?? {})) {
     for (const [name, value] of Object.entries(budget)) {
-      if (value != null && (typeof value !== "number" || !Number.isFinite(value) || value < 0)) throw new Error(`invalid supervision lane ${key} ${name}`);
+      if (value != null && (typeof value !== "number" || !Number.isFinite(value) || value < 0)) throw new ConfigError(`invalid supervision lanes.${key}.${name}: expected a nonnegative number or null`);
     }
   }
   return {
