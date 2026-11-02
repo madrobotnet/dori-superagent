@@ -81,6 +81,24 @@ test("a corrupt journal fails with its line number instead of hiding a lost repo
   expect(() => reports.read(lane.key)).toThrow("reports.jsonl:2:");
 });
 
+test("one corrupt journal is reported once and does not stop the sweep for other lanes", async () => {
+  // Given a lane with a corrupt journal and another lane that is silent past the nudge time.
+  const world = newWorld();
+  world.screen = "Working (1m)\n❯ ";
+  const deps = depsFor(world, fakeClock(T0 + 30 * MIN), state.dir);
+  await deps.registry.write({ ...lane, key: "bad-lane", pane: "w:p8" });
+  await deps.registry.write(lane);
+  reports.report("bad-lane", "milestone", "first", T0);
+  appendFileSync(reports.path("bad-lane"), "{partial\n");
+  reports.report(lane.key, "milestone", "started", T0);
+  // When freshness runs twice.
+  const first = await freshnessTick(deps, "/home/test");
+  // Then the healthy lane is still nudged, and the error is printed once with its line number.
+  expect(first.map((act) => `${act.kind} ${act.lane}`).sort()).toEqual(["journal-error bad-lane", `nudged ${lane.key}`]);
+  expect(first.find((act) => act.kind === "journal-error")?.detail).toContain("reports.jsonl:2:");
+  expect((await freshnessTick(deps, "/home/test")).map((act) => act.kind)).toEqual([]);
+});
+
 test("compaction failure stalls immediately and Working resumes progress", () => {
   // Given a fresh running lane.
   reports.report(lane.key, "milestone", "started", T0);

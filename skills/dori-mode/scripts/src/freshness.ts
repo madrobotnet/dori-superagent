@@ -3,7 +3,7 @@ import type { FlowDeps } from "./done-flow.ts";
 import { checkPausedLane } from "./pause.ts";
 import { readScreen, sendVerified } from "./panes.ts";
 import { type Lane, statusOf } from "./registry.ts";
-import { reportLine, Reports } from "./reports.ts";
+import { type Progress, ReportError, reportLine, Reports } from "./reports.ts";
 
 export const lastReportLine = (screen: string, key: string): string | null => {
   const grammar = new RegExp(`\\[REPORT\\] ${key.replace(/[.]/g, "\\.")} \\| (milestone|blocker|question|done) \\| (?!<what)\\S`);
@@ -35,7 +35,7 @@ export const anchoredReportLine = (screen: string, key: string): string | null =
   );
 
 export type SweepAct = {
-  readonly kind: "nudged" | "posted" | "no-report" | "pending-report" | "stale-report" | "working-while-paused" | "stalled";
+  readonly kind: "nudged" | "posted" | "no-report" | "pending-report" | "stale-report" | "working-while-paused" | "stalled" | "journal-error";
   readonly lane: string;
   readonly detail: string;
 };
@@ -58,8 +58,23 @@ export const freshnessTick = async (deps: FlowDeps, home: string): Promise<Sweep
     }
     if (statusOf(lane) !== "working" || !lane.pane) continue;
     // Only launched lanes report through the journal; an adopted lane keeps the screen path even if a record exists.
-    const previous = lane.reportProtocol === "jsonl-v1" ? reports.read(lane.key) : null;
-    const progress = previous ? reports.observe(lane.key, await readScreen(deps.run, lane.pane), now, deps.config.nudgeAfterMin * 60_000) : null;
+    let previous: Progress | null = null;
+    let progress: Progress | null = null;
+    if (lane.reportProtocol === "jsonl-v1") {
+      try {
+        previous = reports.read(lane.key);
+        progress = previous ? reports.observe(lane.key, await readScreen(deps.run, lane.pane), now, deps.config.nudgeAfterMin * 60_000) : null;
+      } catch (error) {
+        // One corrupt journal skips its own lane, printed once per error, and never ends the sweep for the others.
+        if (!(error instanceof ReportError)) throw error;
+        const note = `journal-error|${error.message}`;
+        if (note !== lane.lastFreshnessNote) {
+          acts.push({ kind: "journal-error", lane: lane.key, detail: error.message });
+          await deps.registry.write({ ...lane, lastFreshnessNote: note });
+        }
+        continue;
+      }
+    }
     if (progress?.state === "stalled" && previous?.state !== "stalled") {
       acts.push({ kind: "stalled", lane: lane.key, detail: progress.lastEvent.text });
     }
