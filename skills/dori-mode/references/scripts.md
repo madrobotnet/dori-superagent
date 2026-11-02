@@ -61,7 +61,9 @@ Every module takes its HTTP, clock and timers as arguments. That is how the test
 ## Commands
 
 ### `dori launch <key> --title T --brief FILE --done "..." [--thread REF] [--model M] [--cwd DIR]`
-Opens a lane: appends the footer to the brief, opens a tab, starts the agent, and after 20 seconds checks it: `STARTUP_ERROR` on a known failure in the pane (at that check, or on an idle agent with no goal during the goal wait), `STARTUP_OK` only when herdr reports the agent idle or working and `goalMarker` (unless that is empty) shows in the pane's footer, its last three non-empty lines, so agent output above it does not count, `STARTUP_NO_GOAL` when the agent runs but shows no goal for another 60 seconds, and `STARTUP_UNCONFIRMED` (with the last lines) otherwise. Exit 3 on anything but `STARTUP_OK`.
+Opens a lane: puts the repo's lessons (below) above the brief, appends the footer, opens a tab, starts the agent, and after 20 seconds checks it: `STARTUP_ERROR` on a known failure in the pane (at that check, or on an idle agent with no goal during the goal wait), `STARTUP_OK` only when herdr reports the agent idle or working and `goalMarker` (unless that is empty) shows in the pane's footer, its last three non-empty lines, so agent output above it does not count, `STARTUP_NO_GOAL` when the agent runs but shows no goal for another 60 seconds, and `STARTUP_UNCONFIRMED` (with the last lines) otherwise. Exit 3 on anything but `STARTUP_OK`.
+
+`--dry-run` prints the brief as the lane would get it, lessons and footer included, and changes nothing.
 
 ### `dori adopt <key> --pane ID --title T --brief FILE --done "..." [--thread REF]`
 Registers a lane that is already running.
@@ -98,6 +100,11 @@ The two halves of the done flow. Both message the lane's pane and check that Ent
 
 ### `dori close <key> [--note TEXT]`
 Closes a lane now. Refuses (exit 2) unless every `Done =` signal reads back live. On success it marks the thread done through `hooks.threadDone`, closes the tab, and removes the lane's worktrees with a plain `git worktree remove`, which refuses a dirty worktree.
+
+### `dori lesson add <key> --rule TEXT --evidence PATH [--cwd DIR]` / `lesson list [--cwd DIR]` / `lesson mark <id> --outcome ...`
+A lesson is one rule learned in a lane, tied to the evidence that taught it and to the lane's repo (its `cwd`, resolved to a real path). `dori launch` puts up to 8 of the newest `pending` or `helped` lessons for the new lane's `cwd` above its brief, under "Lessons for this repo". `mark` records whether a lesson `helped`, had `no-effect`, was `harmful`, or is now `encoded` in a test, lint or doc; only `pending` and `helped` reach new briefs. Lessons live in `<stateDir>/lessons.jsonl`, one record per change: a mark appends, it never rewrites history. A rule is one line of at most 400 characters. A corrupt journal fails with its line number.
+
+`dori close <key> --lesson TEXT [--evidence PATH]` adds a lesson as part of the close (evidence defaults to the `Done =` line). It never blocks the close: a failure prints `LESSON_WARNING`.
 
 ### `dori pause <key> [--note TEXT]` / `dori resume <key> [--note TEXT]`
 `pause` is for when the owner said wait. It works on a `working` or `not-done` lane. It sends `/goal pause` to the lane's pane, then reads the screen back until the goal command's own line appears on a line of its own: `Goal paused`, or `cannot update goal: no goal exists`, since a lane with no goal has nothing to continue. Only then does it mark the lane `paused` (recorded in its history) and send Escape if a turn is running. The goal is paused first, so stopping the turn cannot hand off to a goal continuation. If the line does not appear, or the send fails, the lane is left as it was and the command prints `PAUSE_UNVERIFIED` and exits 3.

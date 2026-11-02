@@ -9,7 +9,8 @@ import { claimDone, closeLane, type FlowDeps, objectDone, watchTick } from "./do
 import { freshnessTick } from "./freshness.ts";
 import { acquireSlot, pidAlive, releaseSlot } from "./heavy-slot.ts";
 import { guardTick, sampleHost } from "./host-guard.ts";
-import { adoptLane, launchLane, LaunchError } from "./launch.ts";
+import { adoptLane, launchLane, LaunchError, type LaunchInput, prepareLaunch } from "./launch.ts";
+import { isLessonOutcome, LessonError, Lessons } from "./lessons.ts";
 import { pauseLane, resumeLane } from "./pause.ts";
 import { Registry, statusOf } from "./registry.ts";
 import { isReportKind, reportLine, ReportError, Reports } from "./reports.ts";
@@ -31,7 +32,7 @@ import { CheckpointError, Checkpoints } from "./checkpoints.ts";
 const USAGE = `dori <command> [options]
 
   launch <key> --title T --brief FILE --done "merged o/r#N; closed o/r#M" [--thread REF] [--model M] [--cwd DIR]
-         [--wall-minutes N|none] [--token-limit N|none] [--cost-limit N|none] [--activity-path FILE ...]
+         [--wall-minutes N|none] [--token-limit N|none] [--cost-limit N|none] [--activity-path FILE ...] [--dry-run]
   adopt  <key> --pane ID --title T --brief FILE --done "..." [--thread REF]
   sync   [--write]                     registry vs live panes; read-only unless --write
   boot                                 read-only check after a restart: Slack auth, vanished panes, journals, stale watches
@@ -44,7 +45,11 @@ const USAGE = `dori <command> [options]
                                        check every commit's author/committer email and PR-level tests; print the UI test loop (not run)
   claim-done [<key>] --evidence TEXT  key defaults to the lane registered for $HERDR_PANE_ID
   object-done <key> --reason TEXT [--reason TEXT ...]
-  close  <key> [--note TEXT]           close now (Done signals must read back live)
+  lesson add <key> --rule TEXT --evidence PATH [--cwd DIR]
+  lesson list [--cwd DIR]             show current lessons, newest first
+  lesson mark <id> --outcome pending|helped|no-effect|harmful|encoded
+  close  <key> [--note TEXT] [--lesson TEXT] [--evidence PATH]
+                                       close now (Done signals must read back live); an optional lesson never blocks it
   pause  <key> [--note TEXT]           the owner said wait: goal paused (read back), running turn stopped, no nudges; exit 3 if unconfirmed
   resume <key> [--note TEXT]           undo pause: goal resumed (read back), lane back to its earlier status
   watch                                long-running: emits LANE_* lines every 30 s
@@ -81,6 +86,7 @@ const flags = parseArgs({
     step: { type: "string" }, result: { type: "string" }, "remote-effect": { type: "string", multiple: true },
     "wall-minutes": { type: "string" }, "token-limit": { type: "string" }, "cost-limit": { type: "string" },
     "activity-path": { type: "string", multiple: true },
+    rule: { type: "string" }, outcome: { type: "string" }, lesson: { type: "string" }, "dry-run": { type: "boolean" },
   },
 });
 const opt = (name: string): string | undefined => {
@@ -129,11 +135,16 @@ try {
     }
     case "launch": {
       const wallMinutes = ceiling("wall-minutes"), tokens = ceiling("token-limit"), costUsd = ceiling("cost-limit");
-      const r = await launchLane(deps, {
+      const input: LaunchInput = {
         key: key ?? "", title: need("title"), brief: need("brief"), done: need("done"), thread: opt("thread"), model: opt("model"), cwd: opt("cwd"),
         budget: { ...(wallMinutes !== undefined ? { wallMinutes } : {}), ...(tokens !== undefined ? { tokens } : {}), ...(costUsd !== undefined ? { costUsd } : {}) },
         activityPaths: strings("activity-path"),
-      });
+      };
+      if (flags.values["dry-run"]) {
+        console.log((await prepareLaunch(deps, input)).preamble);
+        break;
+      }
+      const r = await launchLane(deps, input);
       console.log(`LAUNCHED ${r.lane.key} pane=${r.lane.pane} tab=${r.lane.tab ?? "?"}`);
       console.log(r.startup);
       process.exit(r.startup.startsWith("STARTUP_OK") ? 0 : 3);
@@ -163,6 +174,33 @@ try {
       });
       for (const line of r.lines) console.log(line);
       process.exit(r.exitCode);
+    }
+    case "lesson": {
+      const lessons = new Lessons(config.stateDir);
+      switch (key) {
+        case "add": {
+          const laneKey = flags.positionals[1] ?? die("lesson add needs a lane key");
+          const target = await deps.registry.read(laneKey) ?? die(`no registered lane "${laneKey}"`);
+          console.log(JSON.stringify(lessons.add({
+            lane: laneKey, cwd: opt("cwd") ?? target.cwd ?? config.defaultCwd,
+            rule: need("rule"), evidence: need("evidence"),
+          }, realClock.now())));
+          break;
+        }
+        case "list":
+          console.log(JSON.stringify(lessons.list(opt("cwd")), null, 2));
+          break;
+        case "mark": {
+          const id = flags.positionals[1] ?? die("lesson mark needs a lesson id");
+          const outcome = need("outcome");
+          if (isLessonOutcome(outcome)) console.log(JSON.stringify(lessons.mark(id, outcome)));
+          else die("--outcome must be pending, helped, no-effect, harmful or encoded");
+          break;
+        }
+        default:
+          die("lesson needs add, list or mark");
+      }
+      break;
     }
     case "checkpoint": {
       const target = await lane(key ?? die("checkpoint needs a lane key"));
@@ -200,7 +238,10 @@ try {
       break;
     }
     case "close": {
-      const r = await closeLane(deps, await lane(key ?? die("close needs a lane key")), opt("note") ?? "closed by the lead");
+      const target = await lane(key ?? die("close needs a lane key"));
+      const rule = opt("lesson");
+      const r = await closeLane(deps, target, opt("note") ?? "closed by the lead",
+        rule === undefined ? undefined : { rule, evidence: opt("evidence") ?? target.done });
       for (const line of r.lines) console.log(line);
       process.exit(r.closed ? 0 : 2);
     }
@@ -324,6 +365,6 @@ try {
       process.exit(command ? 1 : 0);
   }
 } catch (e) {
-  if (e instanceof LaunchError || e instanceof UnsafeMessageError || e instanceof MessengerError || e instanceof TranscriptionError || e instanceof ReportError || e instanceof CheckpointError) die(e.message);
+  if (e instanceof LaunchError || e instanceof UnsafeMessageError || e instanceof MessengerError || e instanceof TranscriptionError || e instanceof ReportError || e instanceof CheckpointError || e instanceof LessonError) die(e.message);
   throw e;
 }

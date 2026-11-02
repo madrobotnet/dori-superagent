@@ -8,6 +8,7 @@ import { iso } from "./run.ts";
 import { Reports } from "./reports.ts";
 import { doneSyntaxErrors } from "./signals.ts";
 import type { BudgetLimits } from "./supervision.ts";
+import { Lessons, renderLessons } from "./lessons.ts";
 
 export type LaunchInput = {
   readonly key: string;
@@ -73,7 +74,7 @@ export const adoptLane = async (deps: FlowDeps, input: LaunchInput & { readonly 
   return lane;
 };
 
-export const launchLane = async (deps: FlowDeps, input: LaunchInput): Promise<{ readonly lane: Lane; readonly startup: string }> => {
+export const prepareLaunch = async (deps: FlowDeps, input: LaunchInput): Promise<{ readonly lane: Lane; readonly preamble: string }> => {
   await validateLaunch(deps, input);
   const model = input.model ?? deps.config.defaultModel;
   const cwd = input.cwd ?? deps.config.defaultCwd;
@@ -89,7 +90,15 @@ export const launchLane = async (deps: FlowDeps, input: LaunchInput): Promise<{ 
     },
     activityPaths: input.activityPaths ?? [],
   };
-  await Bun.write(input.brief, `${(await briefFile.text()).replace(/\s*$/, "")}\n${footer(draft, deps.config.leadPane, deps.config.repoIdentities)}`);
+  const lessons = renderLessons(new Lessons(deps.config.stateDir).forRepo(cwd));
+  return { lane: draft, preamble: `${lessons}${(await briefFile.text()).replace(/\s*$/, "")}\n${footer(draft, deps.config.leadPane, deps.config.repoIdentities)}` };
+};
+
+export const launchLane = async (deps: FlowDeps, input: LaunchInput): Promise<{ readonly lane: Lane; readonly startup: string }> => {
+  const { lane: draft, preamble } = await prepareLaunch(deps, input);
+  const model = input.model ?? deps.config.defaultModel;
+  const cwd = input.cwd ?? deps.config.defaultCwd;
+  await Bun.write(input.brief, preamble);
   const created = await deps.run(["herdr", "tab", "create", ...(deps.config.laneWorkspace ? ["--workspace", deps.config.laneWorkspace] : []), "--cwd", cwd, "--label", input.key, "--no-focus"]);
   if (created.code !== 0) throw new LaunchError(`herdr tab create failed: ${created.err || created.out}`);
   const made = (JSON.parse(created.out) as { result: { root_pane: { pane_id: string; tab_id?: string }; tab_id?: string } }).result;

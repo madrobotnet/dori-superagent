@@ -6,6 +6,7 @@ import { type Clock, iso, type Runner } from "./run.ts";
 import { sendVerified } from "./panes.ts";
 import { checkDone, type SignalIo } from "./signals.ts";
 import { Supervision } from "./supervision.ts";
+import { Lessons, type LessonInput } from "./lessons.ts";
 
 export type FlowDeps = {
   readonly run: Runner;
@@ -78,7 +79,7 @@ export const unpushedWork = async (deps: FlowDeps, lane: Lane): Promise<string[]
   return reasons;
 };
 
-export const closeLane = async (deps: FlowDeps, lane: Lane, note: string): Promise<{ readonly closed: boolean; readonly lines: string[] }> => {
+export const closeLane = async (deps: FlowDeps, lane: Lane, note: string, lesson?: Pick<LessonInput, "rule" | "evidence">): Promise<{ readonly closed: boolean; readonly lines: string[] }> => {
   const exists = deps.exists ?? existsSync;
   const checks = await checkDone(lane.done, deps.run, signalIo(deps, lane));
   const lines = checks.map((c) => `SIGNAL ${c.ok ? "OK " : "NOT"} ${c.signal} -> ${c.detail}`);
@@ -106,6 +107,15 @@ export const closeLane = async (deps: FlowDeps, lane: Lane, note: string): Promi
   const at = iso(deps.clock);
   const receipt = { checks, note, cleanup };
   await deps.registry.write(withStatus(lane, "closed", note, at, { closedAt: at, receipt }));
+  if (lesson) {
+    try {
+      const added = new Lessons(deps.config.stateDir).add({ ...lesson, lane: lane.key, cwd: root }, deps.clock.now());
+      lines.push(`LESSON ${added.id}`);
+    } catch (error) {
+      // Lesson capture is optional; report failure without undoing a completed close.
+      lines.push(`LESSON_WARNING ${lane.key}: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
   return { closed: true, lines: [...lines, `CLOSED ${lane.key} ${JSON.stringify(receipt)}`] };
 };
 
