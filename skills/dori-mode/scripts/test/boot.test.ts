@@ -51,10 +51,10 @@ test("persistent watches on closed or verified lanes become owner-scoped stop ca
   // Given watches for closed, verified and still-claimed lanes, plus a non-persistent one.
   const lanes = [lane("closed", "closed"), lane("verified", "verified-done"), lane("claimed", "done-claimed")];
   const input = manifest([
-    { description: "closed reports", monitorId: "mon_CLOSED" },
+    { command: "dori watch closed", monitorId: "mon_CLOSED" },
     { command: "herdr pane read w1:verified", monitorId: "mon_VERIFIED" },
-    { description: "claimed reports", monitorId: "mon_CLAIMED" },
-    { description: "closed reports", monitorId: "mon_EPHEMERAL", persistent: false },
+    { command: "dori watch claimed", monitorId: "mon_CLAIMED" },
+    { command: "dori watch closed", monitorId: "mon_EPHEMERAL", persistent: false },
   ]);
   // When cleanup candidates are computed.
   const result = monitorCleanup(lanes, [input]);
@@ -69,10 +69,10 @@ test("shared, prefix-matched, unknown and foreign-owner watches are preserved", 
   // Given a closed lane whose key is a prefix of an active one, and watches of every risky shape.
   const lanes = [lane("api", "closed"), lane("api-release"), lane("closed", "closed")];
   const result = monitorCleanup(lanes, [manifest([
-    { description: "api-release reports", monitorId: "mon_ACTIVE" },
-    { description: "closed and api-release reports", monitorId: "mon_SHARED" },
-    { description: "unrelated presence", monitorId: "mon_UNKNOWN" },
-    { description: "closed reports", sessionId: "other", monitorId: "mon_WRONGOWNER" },
+    { command: "dori watch api-release", monitorId: "mon_ACTIVE" },
+    { command: "dori watch closed api-release", monitorId: "mon_SHARED" },
+    { description: "unrelated presence", command: "bun presence.ts", monitorId: "mon_UNKNOWN" },
+    { command: "dori watch closed", sessionId: "other", monitorId: "mon_WRONGOWNER" },
   ])]);
   // Then none is offered for cleanup.
   expect(result).toEqual([]);
@@ -82,14 +82,27 @@ test("an active lane named after a colon or before a period or colon still keeps
   // Given a closed lane, an active one, and a closed key that appears only inside a dotted name.
   const lanes = [lane("closed", "closed"), lane("api-release"), lane("v2", "closed")];
   const result = monitorCleanup(lanes, [manifest([
-    { description: "closed reports; lane:api-release", monitorId: "mon_COLON" },
-    { description: "closed reports, then api-release.", monitorId: "mon_PERIOD" },
-    { description: "closed and api-release: both", monitorId: "mon_TRAILCOLON" },
-    { description: "watch api.v2 only", monitorId: "mon_DOTTED" },
-    { description: "closed reports", monitorId: "mon_CLOSED" },
+    { command: "dori watch closed", description: "closed reports; lane:api-release", monitorId: "mon_COLON" },
+    { command: "dori watch closed", description: "closed reports, then api-release.", monitorId: "mon_PERIOD" },
+    { command: "dori watch closed", path: "/logs/api-release: both", monitorId: "mon_TRAILCOLON" },
+    { command: "dori watch api.v2", monitorId: "mon_DOTTED" },
+    { command: "dori watch closed", monitorId: "mon_CLOSED" },
   ])]);
   // Then only the watch naming nothing but the closed lane is offered.
   expect(result.map((m) => m.monitorId)).toEqual(["mon_CLOSED"]);
+});
+
+test("a common-word key ties a watch to its lane only as a command or target token, never in prose or a path", () => {
+  // Given a closed lane keyed "docs" and watches that name it in prose, in a path, as a token and by pane.
+  const lanes = [lane("docs", "closed")];
+  const result = monitorCleanup(lanes, [manifest([
+    { description: "CI for the docs site on main", command: "gh run watch 4242", monitorId: "mon_PROSE" },
+    { description: "build log", command: "tail -F build/docs/out.log", monitorId: "mon_PATH" },
+    { description: "lane reports", command: "dori report-watch 'docs'", monitorId: "mon_KEY" },
+    { description: "lane screen", target: "w1:docs", monitorId: "mon_PANE" },
+  ])]);
+  // Then only the token and pane watches are offered, each with the field that matched.
+  expect(result.map((m) => [m.monitorId, m.match])).toEqual([["mon_KEY", ["docs:command:key"]], ["mon_PANE", ["docs:target:pane"]]]);
 });
 
 test("a done journal qualifies a lane for cleanup on its own; halted does not", () => {
@@ -97,8 +110,8 @@ test("a done journal qualifies a lane for cleanup on its own; halted does not", 
   const lanes = [{ ...lane("done-report"), reportState: "done" as const }, { ...lane("halted-report"), reportState: "halted" as const }];
   // When cleanup candidates are computed.
   const cleanup = monitorCleanup(lanes, [manifest([
-    { description: "done-report reports", monitorId: "mon_DONE" },
-    { description: "halted-report reports", monitorId: "mon_HALTED" },
+    { command: "dori watch done-report", monitorId: "mon_DONE" },
+    { command: "dori watch halted-report", monitorId: "mon_HALTED" },
   ])]);
   // Then only the done lane's watch is listed.
   expect(cleanup.map((m) => m.monitorId)).toEqual(["mon_DONE"]);
@@ -127,7 +140,7 @@ test("boot reports vanished panes, journals and stale watches, and writes nothin
   deps.reports.report("api-release", "halted", "work pushed, waiting for the owner", T0);
   const terminal = join(deps.sessionsDir, "lead", "extensions", "terminal");
   mkdirSync(terminal, { recursive: true });
-  writeFileSync(join(terminal, "owner.json"), JSON.stringify(manifest([{ description: "closed reports", monitorId: "mon_REALFIXTURE" }]).data));
+  writeFileSync(join(terminal, "owner.json"), JSON.stringify(manifest([{ command: "dori watch closed", monitorId: "mon_REALFIXTURE" }]).data));
   const before = snapshot(state.dir);
   // When boot runs.
   const result = await bootCheck(deps);
@@ -303,7 +316,7 @@ test("an adopted lane's journal is not read, so a done record there cannot offer
   deps.reports.report("adopted", "done", "finished", T0);
   const terminal = join(deps.sessionsDir, "lead", "extensions", "terminal");
   mkdirSync(terminal, { recursive: true });
-  writeFileSync(join(terminal, "owner.json"), JSON.stringify(manifest([{ description: "adopted reports", monitorId: "mon_ADOPTED" }]).data));
+  writeFileSync(join(terminal, "owner.json"), JSON.stringify(manifest([{ command: "dori watch adopted", monitorId: "mon_ADOPTED" }]).data));
   // When boot runs; then the journal is ignored like freshness ignores it, and the watch is kept.
   const result = await bootCheck(deps);
   expect(result.lines.some((l) => /^(NO-)?REPORT adopted/.test(l))).toBe(false);
@@ -338,7 +351,7 @@ test("a manifest with a malformed monitor entry is named as unreadable and the c
   mkdirSync(good, { recursive: true });
   writeFileSync(join(bad, "null.json"), JSON.stringify({ version: 1, sessionId: "owner", monitors: [null] }));
   writeFileSync(join(bad, "string.json"), JSON.stringify({ version: 1, sessionId: "owner", monitors: ["mon_X"] }));
-  writeFileSync(join(good, "owner.json"), JSON.stringify(manifest([{ description: "closed reports", monitorId: "mon_GOOD" }]).data));
+  writeFileSync(join(good, "owner.json"), JSON.stringify(manifest([{ command: "dori watch closed", monitorId: "mon_GOOD" }]).data));
   // When boot runs; then both bad files are named, the good watch is still listed, and the run is incomplete.
   const result = await bootCheck(deps);
   expect(result.lines).toContain(`MONITORS unreadable ${join(bad, "null.json")}`);
@@ -357,12 +370,12 @@ test("one unreadable metadata file is named and the other sessions' cleanup is s
   mkdirSync(bad, { recursive: true });
   mkdirSync(good, { recursive: true });
   writeFileSync(join(bad, "owner.json"), "{partial");
-  writeFileSync(join(good, "owner.json"), JSON.stringify(manifest([{ description: "closed reports", monitorId: "mon_GOOD" }]).data));
+  writeFileSync(join(good, "owner.json"), JSON.stringify(manifest([{ command: "dori watch closed", monitorId: "mon_GOOD" }]).data));
   // When boot runs.
   const result = await bootCheck(deps);
   // Then the bad file is named, the good one still yields its stop call, and its path is shell-quoted.
   expect(result.lines).toContain(`MONITORS unreadable ${join(bad, "owner.json")}`);
-  expect(result.lines).toContain(`CLEANUP closed ownerSession=owner metadata='${join(good, "owner.json")}'`);
+  expect(result.lines).toContain(`CLEANUP closed match=closed:command:key ownerSession=owner metadata='${join(good, "owner.json")}'`);
   expect(result.lines).toContain('STOP in the owner session only: kill_bash({"bash_id":"mon_GOOD"})');
   expect(result.exitCode).toBe(1);
 });

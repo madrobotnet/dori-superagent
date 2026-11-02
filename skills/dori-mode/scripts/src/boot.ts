@@ -21,7 +21,7 @@ export type Monitor = {
 };
 export type Manifest = { readonly path: string; readonly data: { readonly version: number; readonly sessionId: string; readonly monitors: readonly Monitor[] } };
 export type BootLane = Lane & { readonly reportState?: ProgressState };
-export type Cleanup = { readonly monitorId: string; readonly sessionId: string; readonly metadata: string; readonly lanes: readonly string[]; readonly suspended: boolean; readonly stop: string };
+export type Cleanup = { readonly monitorId: string; readonly sessionId: string; readonly metadata: string; readonly lanes: readonly string[]; readonly match: readonly string[]; readonly suspended: boolean; readonly stop: string };
 export type SlackCheck = () => Promise<{ readonly userId: string; readonly teamId: string } | null>;
 export type BootDeps = Pick<FlowDeps, "run" | "registry" | "config"> & {
   readonly reports: Reports;
@@ -56,12 +56,26 @@ export const reconcilePanes = (lanes: readonly Lane[], panes: readonly Pane[]): 
   };
 };
 
-// An exact lane or pane reference, never a prefix such as "api" in "api-release" or "api" in "api.v2". A colon or a
-// period next to the name is punctuation ("lane:api-release", "api-release.") unless the period joins another name.
+// Loose: any mention of a name, prose and paths included. Used only to keep a watch that might belong to an open lane.
+// A colon or a period next to the name is punctuation ("lane:api-release", "api-release.") unless the period joins
+// another name ("api.v2" is not "v2").
 const mentions = (text: string, value: string | undefined): boolean => {
   if (!value) return false;
   const escaped = value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   return new RegExp(`(?<![a-zA-Z0-9_-])(?<![a-zA-Z0-9_-]\\.)${escaped}(?![a-zA-Z0-9_-])(?!\\.[a-zA-Z0-9_-])`).test(text);
+};
+
+// Strict: the evidence that ties a watch to a lane is the lane's pane id or its key as a whole argv token of the
+// command or target. A description is prose and a path segment is not the lane ("build/docs/out.log" is not "docs").
+const TIED_FIELDS = ["command", "target"] as const;
+const tokens = (value: unknown): string[] => (typeof value === "string" ? value.split(/\s+/).map((t) => t.replace(/^['"]+|['"]+$/g, "")).filter(Boolean) : []);
+const tiedBy = (monitor: Monitor, lane: Lane): string | null => {
+  for (const field of TIED_FIELDS) {
+    const words = tokens(monitor[field]);
+    if (lane.pane && words.includes(lane.pane)) return `${lane.key}:${field}:pane`;
+    if (words.includes(lane.key)) return `${lane.key}:${field}:key`;
+  }
+  return null;
 };
 
 export const monitorCleanup = (lanes: readonly BootLane[], manifests: readonly Manifest[]): Cleanup[] => {
@@ -70,12 +84,17 @@ export const monitorCleanup = (lanes: readonly BootLane[], manifests: readonly M
     for (const monitor of data.monitors) {
       if (!monitor.persistent || !/^mon_[A-Za-z0-9]+$/.test(monitor.monitorId ?? "")) continue;
       if (monitor.sessionId !== data.sessionId) continue;
-      const text = [monitor.description, monitor.command, monitor.path, monitor.target].filter(Boolean).join("\n");
-      const matched = lanes.filter((lane) => mentions(text, lane.key) || mentions(text, lane.pane));
-      if (!matched.length || matched.some((lane) => !finished(lane))) continue;
+      const tied = lanes.flatMap((lane) => {
+        const match = tiedBy(monitor, lane);
+        return match ? [{ lane, match }] : [];
+      });
+      if (!tied.length || tied.some(({ lane }) => !finished(lane))) continue;
+      // Any mention of an open lane anywhere in the watch keeps it.
+      const text = [monitor.description, monitor.command, monitor.path, monitor.target].filter((v) => typeof v === "string").join("\n");
+      if (lanes.some((lane) => !finished(lane) && (mentions(text, lane.key) || mentions(text, lane.pane)))) continue;
       const monitorId = monitor.monitorId ?? "";
       cleanup.push({
-        monitorId, sessionId: data.sessionId, metadata: path, lanes: matched.map((lane) => lane.key),
+        monitorId, sessionId: data.sessionId, metadata: path, lanes: tied.map(({ lane }) => lane.key), match: tied.map(({ match }) => match),
         suspended: Boolean(monitor.suspended), stop: `kill_bash(${JSON.stringify({ bash_id: monitorId })})`,
       });
     }
@@ -196,7 +215,7 @@ export const bootCheck = async (deps: BootDeps): Promise<{ exitCode: number; lin
   const cleanup = monitorCleanup(lanes, manifests);
   lines.push(`MONITORS cleanupCandidates=${cleanup.length} (from metadata; liveness unverified)`);
   for (const item of cleanup) {
-    lines.push(`CLEANUP ${item.lanes.join(",")} ownerSession=${item.sessionId} metadata=${shellQuote(item.metadata)}${item.suspended ? " suspended=true" : ""}`);
+    lines.push(`CLEANUP ${item.lanes.join(",")} match=${item.match.join(",")} ownerSession=${item.sessionId} metadata=${shellQuote(item.metadata)}${item.suspended ? " suspended=true" : ""}`);
     lines.push(`STOP in the owner session only: ${item.stop}`);
   }
   // The network step runs last, after every local check, and gives up at a short deadline.
