@@ -40,8 +40,10 @@ export const reportState = (kind: ReportKind): ProgressState => {
   }
 };
 
+// The printed line goes to terminals, so escape sequences and other control characters are dropped from it (a CR or
+// newline becomes one space); the journal keeps the raw text.
 export const reportLine = (report: Report): string =>
-  `[REPORT] ${report.key} | ${report.kind} | ${report.text.replace(/\s*\n\s*/g, " ")}`;
+  `[REPORT] ${report.key} | ${report.kind} | ${Bun.stripANSI(report.text).replace(/\s*[\r\n]+\s*/g, " ").replace(/[\u0000-\u0008\u000b-\u001f\u007f-\u009f]/g, "")}`;
 
 export const parseEvent = (line: string, key: string): LaneEvent => {
   const value: unknown = JSON.parse(line);

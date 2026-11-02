@@ -48,6 +48,16 @@ test("report text round trips quotes and newlines but prints one human line", ()
   expect(reportLine(report)).toBe(`[REPORT] ${lane.key} | milestone | tests passed push "abc123"; $(not a command)`);
 });
 
+test("the printed line carries no terminal controls, while the journal keeps the raw text", () => {
+  // Given text with a carriage return, a CSI erase, an OSC title and a bell.
+  const text = "tests passed\r\u001b[2Kall green\u001b]0;owned\u0007 done\u0008";
+  // When recorded and rendered.
+  const report = reports.report(lane.key, "milestone", text, T0);
+  // Then only printable text reaches the terminal, and the record is unchanged.
+  expect(reportLine(report)).toBe(`[REPORT] ${lane.key} | milestone | tests passed all green done`);
+  expect(new Reports(state.dir).read(lane.key)?.lastReport?.text).toBe(text);
+});
+
 test.each(["../escape", "/root", "x", "bad key"])("rejects invalid lane path %s", (key) => {
   // Given an unsafe key; when selecting storage; then no path is accepted.
   expect(() => reports.path(key)).toThrow(ReportError);
