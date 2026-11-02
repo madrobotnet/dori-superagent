@@ -92,13 +92,15 @@ export class Registry {
     return lanes;
   }
 
-  /** Like list(), but a lane file that cannot be read or parsed is returned in `unreadable` instead of throwing. */
+  /** Like list(), but a lane file that cannot be read, parsed, or holds no lane key is returned in `unreadable` instead of throwing. */
   async scan(): Promise<{ lanes: Lane[]; unreadable: string[] }> {
     const lanes: Lane[] = [];
     const unreadable: string[] = [];
     for (const f of this.files()) {
       try {
-        lanes.push((await Bun.file(f).json()) as Lane);
+        const lane: unknown = await Bun.file(f).json();
+        if (typeof lane !== "object" || lane === null || !("key" in lane) || typeof lane.key !== "string") throw new Error("not a lane record");
+        lanes.push(lane as Lane);
       } catch {
         unreadable.push(f);
       }

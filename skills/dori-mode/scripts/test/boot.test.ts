@@ -187,9 +187,11 @@ test("an unreadable lane file is named and the other lanes are still checked", a
   const deps = bootDeps(world);
   await deps.registry.write(lane("healthy", "working", "w1:gone"));
   writeFileSync(deps.registry.path("broken"), "{partial");
+  writeFileSync(deps.registry.path("null-record"), "null");
   // When boot runs; then the file is named, the healthy lane is still reported, and the run is incomplete.
   const result = await bootCheck(deps);
   expect(result.lines).toContain(`REGISTRY unreadable ${deps.registry.path("broken")}`);
+  expect(result.lines).toContain(`REGISTRY unreadable ${deps.registry.path("null-record")}`);
   expect(result.lines).toContain("VANISHED healthy pane=w1:gone status=working; registry and worktrees preserved; no relaunch");
   expect(result.lines.at(-1)).toBe("BOOT incomplete read-only; nothing restarted, written or stopped");
   expect(result.exitCode).toBe(1);
