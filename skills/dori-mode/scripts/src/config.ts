@@ -64,7 +64,7 @@ export const defaultConfig = (home = homedir()): DoriConfig => ({
   guard: { loadAlert: 150, loadOk: 80, memFreeMinPct: 20, diskFreeMinGb: 50, panesMax: 20 },
   hooks: {},
   repoIdentities: {},
-  supervision: { hungAfterMinutes: 20, staleAfterMinutes: 20, defaults: { wallMinutes: 240, tokens: null, costUsd: null } },
+  supervision: { hungAfterMinutes: 20, staleAfterMinutes: 20, defaults: { wallMinutes: null, tokens: null, costUsd: null } },
 });
 
 export const configPath = (): string => process.env.DORI_CONFIG ?? join(homedir(), ".dori", "config.json");

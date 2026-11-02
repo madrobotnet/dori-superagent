@@ -143,7 +143,7 @@ export class Supervision {
     const timer = workingTimer(screen);
     const activeAt = !previous || activity !== previous.activity ? now : previous.activeAt;
     const usage = await this.usage(lane, now);
-    const limits = { wallMinutes: 240, tokens: null, costUsd: null, ...this.options.defaults, ...this.options.lanes?.[lane.key], ...lane.budget };
+    const limits = { wallMinutes: null, tokens: null, costUsd: null, ...this.options.defaults, ...this.options.lanes?.[lane.key], ...lane.budget };
     const violations: string[] = [];
     const exceeds = (name: keyof BudgetLimits, actual: number | null): void => {
       const ceiling = limits[name];

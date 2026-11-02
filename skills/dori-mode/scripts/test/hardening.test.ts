@@ -98,8 +98,8 @@ test("config rejects invalid ceilings and retains defaults when only one is over
   try {
     const path = join(state.dir, "config.json");
     writeFileSync(path, JSON.stringify({ supervision: { defaults: { tokens: 4000 } } }));
-    // When loaded, default wall time and unknown cost remain explicit.
-    expect((await loadConfig(path)).supervision.defaults).toEqual({ wallMinutes: 240, tokens: 4000, costUsd: null });
+    // When loaded, the other ceilings stay off (null) unless configured.
+    expect((await loadConfig(path)).supervision.defaults).toEqual({ wallMinutes: null, tokens: 4000, costUsd: null });
     writeFileSync(path, JSON.stringify({ supervision: { defaults: { tokens: -1 } } }));
     // Then a typo cannot silently disable the budget.
     await expect(loadConfig(path)).rejects.toThrow("invalid supervision tokens");

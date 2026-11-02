@@ -34,7 +34,7 @@ Needs: bun 1.3+, herdr, git, and the GitHub CLI (`gh`) for `merged`/`closed` sig
 | `guard` | load 150/80, 20% memory, 50 GB disk, 20 panes | `guard` |
 | `hooks.threadReply`, `hooks.threadDone` | none | `freshness`, `close` |
 | `hooks.transcribe` | none | `transcribe` (argv with `{file}`, prints the text) |
-| `supervision` | ceilings 240 min wall, no token or cost limit; hung after 20 min | `freshness`, `launch`, `close` (see Supervision below) |
+| `supervision` | no ceilings by default (set wallMinutes, tokens or costUsd to enable); hung after 20 min | `freshness`, `launch`, `close` (see Supervision below) |
 | `repoIdentities` | none | `verify-pr`, `launch` footer: expected Git name and email per `owner/repo` (keys match without case) |
 
 Hooks are argv templates for your messenger CLI. `{thread}`, `{text}` and `{key}` are filled into each argument separately, so the text stays one argument whatever it contains.
