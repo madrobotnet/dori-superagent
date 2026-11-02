@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { loadConfig } from "../src/config.ts";
@@ -156,6 +156,26 @@ test("a sweep with no usage hook writes no cost readings", async () => {
     clock.at += MIN;
     await freshnessTick(deps, "/home/test");
     expect(existsSync(join(state.dir, "lanes", lane.key, "cost.jsonl"))).toBe(false);
+  } finally { state.done(); }
+});
+
+test("a failing cost hook is reported and does not stop an authorized close", async () => {
+  const state = withState();
+  try {
+    const world = newWorld();
+    const deps = depsFor(world, fakeClock(T0), state.dir, {
+      supervision: { usageArgv: ["usage", "{key}"], recordCostArgv: ["record-cost", "{key}"] },
+    });
+    mkdirSync(join(state.dir, "lanes"), { recursive: true });
+    const external = deps.run;
+    const result = await closeLane({ ...deps, run: async (argv, opts) => {
+      if (argv[0] === "usage") return { code: 0, out: '{"tokens":10,"costUsd":0.1}', err: "" };
+      if (argv[0] === "record-cost") return { code: 1, out: "", err: "ledger down" };
+      return external(argv, opts);
+    } }, lane, "verified");
+    expect(result.closed).toBe(true);
+    expect(result.lines).toContain(`COST ${lane.key} not recorded: recordCost failed for ${lane.key}: ledger down`);
+    expect((await deps.registry.read(lane.key))?.status).toBe("closed");
   } finally { state.done(); }
 });
 

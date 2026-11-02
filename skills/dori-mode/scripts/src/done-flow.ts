@@ -83,8 +83,13 @@ export const closeLane = async (deps: FlowDeps, lane: Lane, note: string): Promi
   const checks = await checkDone(lane.done, deps.run, signalIo(deps, lane));
   const lines = checks.map((c) => `SIGNAL ${c.ok ? "OK " : "NOT"} ${c.signal} -> ${c.detail}`);
   if (checks.some((c) => !c.ok)) return { closed: false, lines: [...lines, `REFUSED ${lane.key}: a Done signal is not live`] };
-  const cost = await new Supervision({ ...deps, stateDir: deps.config.stateDir }, deps.config.supervision).close(lane);
-  if (cost) lines.push(`COST ${lane.key} tokens=${cost.tokens ?? "unknown"} costUsd=${cost.costUsd ?? "unknown"}`);
+  // Cost is recorded on a best-effort basis: a failing hook is printed and never keeps a verified lane open.
+  try {
+    const cost = await new Supervision({ ...deps, stateDir: deps.config.stateDir }, deps.config.supervision).close(lane);
+    if (cost) lines.push(`COST ${lane.key} tokens=${cost.tokens ?? "unknown"} costUsd=${cost.costUsd ?? "unknown"}`);
+  } catch (error) {
+    lines.push(`COST ${lane.key} not recorded: ${error instanceof Error ? error.message : String(error)}`);
+  }
   const cleanup: string[] = [];
   const hook = deps.config.hooks.threadDone;
   if (hook && lane.thread !== "none") {
