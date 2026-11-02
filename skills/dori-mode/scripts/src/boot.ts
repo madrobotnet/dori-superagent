@@ -201,7 +201,8 @@ export const bootCheck = async (deps: BootDeps): Promise<{ exitCode: number; lin
   if (panes) {
     const result = reconcilePanes(lanes, panes);
     const lead = deps.config.leadPane;
-    const vanished = result.lanes.filter((lane) => lane.paneState === "vanished" && lane.status !== "closed");
+    // A closed or verified-done lane is finished with its pane; only the others are worth flagging.
+    const vanished = result.lanes.filter((lane) => lane.paneState === "vanished" && lane.status !== "closed" && lane.status !== "verified-done");
     lines.push(`PANES lead=${lead || "unconfigured"} leadState=${panes.some((p) => p.pane_id === lead) ? "live" : "missing"} registeredLive=${result.lanes.filter((l) => l.paneState === "live" && l.status !== "closed").length} vanished=${vanished.length} unregistered=${result.unregistered.length}`);
     for (const lane of vanished) lines.push(`VANISHED ${lane.key} pane=${lane.pane} status=${lane.status}; registry and worktrees preserved; no relaunch`);
     if (result.unregistered.length) lines.push(`UNREGISTERED ${result.unregistered.join(" ")}`);

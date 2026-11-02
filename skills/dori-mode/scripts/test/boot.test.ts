@@ -207,6 +207,19 @@ test("a lanes path that cannot be listed is named and the rest of boot still run
   expect(result.exitCode).toBe(1);
 });
 
+test("a verified-done lane whose pane is gone is not flagged VANISHED", async () => {
+  // Given a verified-done lane and a working lane, both on panes that no longer exist.
+  const world = newWorld();
+  world.panes = [{ pane_id: "w2:p1", workspace_id: "w2" }];
+  const deps = bootDeps(world);
+  await deps.registry.write(lane("verified", "verified-done", "w1:p7"));
+  await deps.registry.write(lane("working", "working", "w1:p8"));
+  // When boot runs; then only the working lane is flagged.
+  const result = await bootCheck(deps);
+  expect(result.lines.filter((l) => l.startsWith("VANISHED"))).toEqual(["VANISHED working pane=w1:p8 status=working; registry and worktrees preserved; no relaunch"]);
+  expect(result.lines).toContain("PANES lead=w2:p1 leadState=live registeredLive=0 vanished=1 unregistered=1");
+});
+
 test("a failed pane list stays unknown instead of declaring every lane vanished", async () => {
   // Given herdr failing to list panes.
   const world = newWorld();
