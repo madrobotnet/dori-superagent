@@ -130,7 +130,8 @@ export const verifyPr = async (repo: string, number: number, run: Runner, option
       const rows = await api(`${root}/pulls/${number}/commits?per_page=100&page=${page}`);
       if (!Array.isArray(rows) || !rows.every((c) => c && typeof c.sha === "string" && /^[a-f0-9]{40}$/i.test(c.sha))) throw new Error("incomplete PR commit list");
       listed.push(...rows);
-      if (rows.length < 100) break;
+      // More commits than the PR reports fails the count check below instead of paging forever.
+      if (rows.length < 100 || listed.length > before.commits) break;
     }
     if (listed.length !== before.commits || new Set(listed.map((c) => c.sha)).size !== listed.length) throw new Error(`incomplete PR commit list: received ${listed.length}, expected ${before.commits}`);
     if (listed.at(-1)?.sha !== before.head.sha) throw new Error("PR commit list does not end at the current head");

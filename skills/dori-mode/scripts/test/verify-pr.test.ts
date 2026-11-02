@@ -314,6 +314,21 @@ test("a head or body change during verification is not certified", async () => {
   }
 });
 
+test("a commit list that keeps returning full pages stops at the PR's commit count", async () => {
+  const p = snapshot();
+  const fake = recordedRunner(p);
+  let pages = 0;
+  const run: Runner = async (argv, opts) => {
+    if (!argv[4]!.includes("/pulls/99/commits?")) return fake.run(argv, opts);
+    if (++pages > 5) throw new Error("commit list read past the PR's commit count");
+    return json(Array.from({ length: 100 }, () => ({ sha })));
+  };
+  const result = await verifyPr(p.repo, p.number, run, withIdentity);
+  expect(result.ok).toBe(false);
+  expect(result.errors[0]).toStartWith("incomplete PR commit list");
+  expect(pages).toBe(1);
+});
+
 test("a duplicate commit list cannot satisfy the expected count", async () => {
   const p = snapshot([commit([source, changedTest]), commit([changedTest], "test(ui): more", otherSha)]);
   const fake = recordedRunner(p);
