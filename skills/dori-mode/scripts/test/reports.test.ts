@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { appendFileSync, readFileSync, statSync } from "node:fs";
+import { appendFileSync, chmodSync, mkdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 
 import { freshnessTick } from "../src/freshness.ts";
@@ -250,4 +250,12 @@ test("the lane journal directory is private (0700), like the 0600 journal", () =
     expect(statSync(join(state.dir, "lanes", "private-lane")).mode & 0o777).toBe(0o700);
     expect(statSync(reports.path("private-lane")).mode & 0o777).toBe(0o600);
   } finally { process.umask(umask); state.done(); }
+});
+
+test("a lane directory created earlier with wider permissions is made 0700 on the next report", () => {
+  const dir = join(state.dir, "lanes", lane.key);
+  mkdirSync(dir, { recursive: true, mode: 0o755 });
+  chmodSync(dir, 0o755);
+  reports.report(lane.key, "milestone", "first", T0);
+  expect(statSync(dir).mode & 0o777).toBe(0o700);
 });

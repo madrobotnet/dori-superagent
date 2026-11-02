@@ -1,4 +1,4 @@
-import { appendFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
+import { appendFileSync, chmodSync, existsSync, mkdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { LANE_KEY } from "./registry.ts";
@@ -102,7 +102,10 @@ export class Reports {
   append(event: LaneEvent): void {
     const path = this.path(event.key);
     parseEvent(JSON.stringify(event), event.key);
-    mkdirSync(join(this.stateDir, "lanes", event.key), { recursive: true, mode: 0o700 });
+    const dir = join(this.stateDir, "lanes", event.key);
+    mkdirSync(dir, { recursive: true, mode: 0o700 });
+    // mkdir's mode applies only on creation; a directory made earlier with wider permissions is narrowed here.
+    chmodSync(dir, 0o700);
     appendFileSync(path, `${JSON.stringify(event)}\n`, { encoding: "utf8", mode: 0o600 });
   }
 
