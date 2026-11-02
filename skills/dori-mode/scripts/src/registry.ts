@@ -40,6 +40,7 @@ export type Lane = {
   readonly pausedSeenWorking?: boolean;
   /** The status a paused lane had before it was paused; `resume` restores it. */
   readonly pausedFrom?: LaneStatus;
+  readonly reportProtocol?: "jsonl-v1";
   readonly receipt?: unknown;
 };
 

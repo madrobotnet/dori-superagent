@@ -1,0 +1,155 @@
+import { afterEach, beforeEach, expect, test } from "bun:test";
+import { appendFileSync, readFileSync } from "node:fs";
+
+import { freshnessTick } from "../src/freshness.ts";
+import { parseEvent, ReportError, Reports, reportLine } from "../src/reports.ts";
+import { statusOf, type Lane } from "../src/registry.ts";
+import { depsFor, fakeClock, newWorld, withState } from "./fakes.ts";
+
+const T0 = Date.parse("2026-01-01T12:00:00Z");
+const MIN = 60_000;
+const lane: Lane = {
+  key: "report-lane", title: "reports", thread: "chat:team/1", pane: "w:p7",
+  brief: "/b.md", done: "file /done.md", openedAt: new Date(T0).toISOString(),
+  reportProtocol: "jsonl-v1",
+};
+let state: ReturnType<typeof withState>;
+let reports: Reports;
+beforeEach(() => {
+  state = withState();
+  reports = new Reports(state.dir);
+});
+afterEach(() => state.done());
+
+test("report transitions survive restarting the reader without changing done protocol", async () => {
+  // Given an open lane with an independent completion status.
+  const deps = depsFor(newWorld(), fakeClock(T0), state.dir);
+  await deps.registry.write(lane);
+  // When each report kind is appended in order.
+  for (const [kind, expected] of [
+    ["milestone", "running"], ["blocker", "blocked"], ["milestone", "running"],
+    ["halted", "halted"], ["milestone", "running"], ["done", "done"],
+  ] as const) {
+    reports.report(lane.key, kind, `state ${expected}`, T0);
+    // Then fresh readers recover the persisted state, not a memory cache.
+    expect(new Reports(state.dir).read(lane.key)?.state).toBe(expected);
+  }
+  expect(statusOf((await deps.registry.read(lane.key)) ?? lane)).toBe("working");
+  expect(readFileSync(reports.path(lane.key), "utf8").trim().split("\n")).toHaveLength(6);
+});
+
+test("report text round trips quotes and newlines but prints one human line", () => {
+  // Given untrusted text that must remain data.
+  const text = 'tests passed\npush "abc123"; $(not a command)';
+  // When recorded and rendered.
+  const report = reports.report(lane.key, "milestone", text, T0);
+  // Then JSON preserves text while terminal output stays a single line.
+  expect(new Reports(state.dir).read(lane.key)?.lastReport?.text).toBe(text);
+  expect(reportLine(report)).toBe(`[REPORT] ${lane.key} | milestone | tests passed push "abc123"; $(not a command)`);
+});
+
+test.each(["../escape", "/root", "x", "bad key"])("rejects invalid lane path %s", (key) => {
+  // Given an unsafe key; when selecting storage; then no path is accepted.
+  expect(() => reports.path(key)).toThrow(ReportError);
+});
+
+test.each([
+  '{"type":"report","key":"other","at":"2026-01-01","kind":"done","text":"ok"}',
+  '{"type":"report","key":"report-lane","at":"bad","kind":"done","text":"ok"}',
+  '{"type":"report","key":"report-lane","at":"2026-01-01","kind":"unknown","text":"ok"}',
+  '{"type":"report","key":"report-lane","at":"2026-01-01","kind":"done","text":" "}',
+])("rejects malformed report records %#", (line) => {
+  // Given an invalid record; when parsed; then it cannot assert progress.
+  expect(() => parseEvent(line, lane.key)).toThrow(ReportError);
+});
+
+test("a corrupt journal fails with its line number instead of hiding a lost report", () => {
+  // Given a valid report followed by corruption.
+  reports.report(lane.key, "milestone", "first", T0);
+  appendFileSync(reports.path(lane.key), "{partial\n");
+  // When the journal is read; then corruption is explicit.
+  expect(() => reports.read(lane.key)).toThrow("reports.jsonl:2:");
+});
+
+test("compaction failure stalls immediately and Working resumes progress", () => {
+  // Given a fresh running lane.
+  reports.report(lane.key, "milestone", "started", T0);
+  // When compaction fails and subsequently real activity resumes.
+  expect(reports.observe(lane.key, "Error: compaction failed\n❯ ", T0 + MIN, 15 * MIN)?.state).toBe("stalled");
+  expect(reports.observe(lane.key, "Working (2s)\n❯ ", T0 + 2 * MIN, 15 * MIN)?.state).toBe("running");
+  // Then the last report still supplies the report clock.
+  expect(reports.read(lane.key)?.lastReport?.at).toBe(new Date(T0).toISOString());
+});
+
+test("only a stale idle prompt stalls and repeated observations do not grow the log", () => {
+  // Given a milestone with a fresh prompt.
+  reports.report(lane.key, "milestone", "started", T0);
+  expect(reports.observe(lane.key, "❯ ", T0 + MIN, 15 * MIN)?.state).toBe("running");
+  // When the same prompt outlives the freshness threshold.
+  expect(reports.observe(lane.key, "❯ ", T0 + 16 * MIN, 15 * MIN)?.state).toBe("stalled");
+  reports.observe(lane.key, "❯ ", T0 + 17 * MIN, 15 * MIN);
+  // Then one state transition, rather than every poll, is persisted.
+  expect(readFileSync(reports.path(lane.key), "utf8").trim().split("\n")).toHaveLength(2);
+});
+
+test.each(["blocker", "halted", "done"] as const)("pane activity cannot overwrite a declared %s state", (kind) => {
+  // Given explicit lane intent.
+  reports.report(lane.key, kind, "paused", T0);
+  const expected = reports.read(lane.key)?.state;
+  // When the pane still shows Working or a compaction failure.
+  reports.observe(lane.key, "Working (25m)\ncompaction failed\n❯ ", T0 + 30 * MIN, 15 * MIN);
+  // Then intent takes precedence over stale screen content.
+  expect(new Reports(state.dir).read(lane.key)?.state).toBe(expected);
+});
+
+test("freshness forwards a durable report after it has scrolled off the pane", async () => {
+  // Given a stale report, but an actively working pane with no report text.
+  const world = newWorld();
+  world.screen = "Working (2m)\n❯ ";
+  const deps = depsFor(world, fakeClock(T0 + 21 * MIN), state.dir, {
+    hooks: { threadReply: ["notify", "{thread}", "{text}"] },
+  });
+  await deps.registry.write({ ...lane, lastNudgeAt: T0 + 20 * MIN });
+  reports.report(lane.key, "milestone", "all checks green", T0);
+  // When freshness reads its authoritative journal.
+  const acts = await freshnessTick(deps, "/home/test");
+  // Then forwarding uses the report, never NO-REPORT.
+  expect(acts.map((act) => act.kind)).toEqual(["posted"]);
+  expect(world.calls.find((call) => call[0] === "notify")?.[2]).toContain("all checks green");
+});
+
+test("new report time suppresses nudges even when registry lastReplyAt is old", async () => {
+  // Given a newly reported milestone and an old registry timestamp.
+  const world = newWorld();
+  const deps = depsFor(world, fakeClock(T0 + 30 * MIN), state.dir);
+  await deps.registry.write(lane);
+  reports.report(lane.key, "milestone", "just completed step", T0 + 29 * MIN);
+  // When freshness runs; then no stale-registry nudge is sent.
+  expect(await freshnessTick(deps, "/home/test")).toEqual([]);
+  expect(world.calls.some((call) => call[2] === "send-text")).toBe(false);
+});
+
+test("a stalled structured lane alerts once even without a thread hook", async () => {
+  // Given a lane whose idle prompt has no fresh progress.
+  const world = newWorld();
+  const deps = depsFor(world, fakeClock(T0 + 21 * MIN), state.dir);
+  await deps.registry.write({ ...lane, thread: "none" });
+  reports.report(lane.key, "milestone", "started", T0);
+  // When observed twice; then one alert is emitted and no input is injected.
+  expect((await freshnessTick(deps, "/home/test")).map((act) => act.kind)).toEqual(["stalled"]);
+  expect(await freshnessTick(deps, "/home/test")).toEqual([]);
+  expect(world.calls.some((call) => call[2] === "send-text")).toBe(false);
+});
+
+test("structured lanes never fall back to unrelated pane report text", async () => {
+  // Given a new-protocol lane with no journal and report-like screen output.
+  const world = newWorld();
+  world.screen = `[REPORT] ${lane.key} | done | example, not durable`;
+  const deps = depsFor(world, fakeClock(T0 + 30 * MIN), state.dir, {
+    hooks: { threadReply: ["notify", "{thread}", "{text}"] },
+  });
+  await deps.registry.write({ ...lane, lastNudgeAt: T0 + 29 * MIN });
+  // When forwarding is due; then the missing journal remains explicit.
+  expect((await freshnessTick(deps, "/home/test")).map((act) => act.kind)).toEqual(["no-report"]);
+  expect(world.calls.some((call) => call[0] === "notify")).toBe(false);
+});

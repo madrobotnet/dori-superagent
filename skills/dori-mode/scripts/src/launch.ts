@@ -3,6 +3,7 @@ import type { FlowDeps } from "./done-flow.ts";
 import { readScreen, statusLookup } from "./panes.ts";
 import { LANE_KEY, type Lane } from "./registry.ts";
 import { iso } from "./run.ts";
+import { Reports } from "./reports.ts";
 import { doneSyntaxErrors } from "./signals.ts";
 
 export type LaunchInput = {
@@ -31,7 +32,7 @@ export const footer = (lane: Lane, leadPane: string): string => [
   "## Lane footer (written by dori launch)",
   `- Key: ${lane.key}. Work thread: ${lane.thread}.`,
   `- Done = ${lane.done}. The lane closes only when every signal reads back live.`,
-  `- Report to the lead at each milestone: [REPORT] ${lane.key} | <milestone|blocker|question|done> | <what, with links>, sent to pane ${leadPane || "(lead pane)"} as an argv array, never a shell string.`,
+  `- Persist each milestone, blocker, halt and completion with dori report ${lane.key} --kind milestone|blocker|halted|done --text "what, with evidence links". It appends reports.jsonl and prints the human [REPORT] line; send that line to pane ${leadPane || "(lead pane)"} as an argv array, never a shell string.`,
   `- When done: dori claim-done ${lane.key} --evidence "<merge SHA, closed issue, version>". See references/done-protocol.md.`,
   "",
 ].join("\n");
@@ -49,7 +50,7 @@ export const launchLane = async (deps: FlowDeps, input: LaunchInput): Promise<{ 
   const cwd = input.cwd ?? deps.config.defaultCwd;
   const briefFile = Bun.file(input.brief);
   if (!(await briefFile.exists())) throw new LaunchError(`brief not found: ${input.brief}`);
-  const draft: Lane = { key: input.key, title: input.title, thread: input.thread ?? "none", brief: input.brief, done: input.done, cwd, model, openedAt: iso(deps.clock) };
+  const draft: Lane = { key: input.key, title: input.title, thread: input.thread ?? "none", brief: input.brief, done: input.done, cwd, model, openedAt: iso(deps.clock), reportProtocol: "jsonl-v1" };
   await Bun.write(input.brief, `${(await briefFile.text()).replace(/\s*$/, "")}\n${footer(draft, deps.config.leadPane)}`);
   const created = await deps.run(["herdr", "tab", "create", ...(deps.config.laneWorkspace ? ["--workspace", deps.config.laneWorkspace] : []), "--cwd", cwd, "--label", input.key, "--no-focus"]);
   if (created.code !== 0) throw new LaunchError(`herdr tab create failed: ${created.err || created.out}`);
@@ -60,6 +61,7 @@ export const launchLane = async (deps: FlowDeps, input: LaunchInput): Promise<{ 
   await deps.run(["herdr", "pane", "run", pane, fill(deps.config.agentCommand, { model, prompt }).map(quoteForPane).join(" ")]);
   const lane: Lane = { ...draft, pane, ...(tab ? { tab } : {}) };
   await deps.registry.write(lane);
+  new Reports(deps.config.stateDir).report(lane.key, "milestone", `Lane launched in ${pane}`, deps.clock.now());
   await deps.clock.sleep(20_000);
   const screen = await readScreen(deps.run, pane, 40);
   const bad = STARTUP_FAILURE.exec(screen);

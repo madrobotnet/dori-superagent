@@ -66,6 +66,9 @@ Registers a lane that is already running.
 ### `dori sync [--write]`
 Prints `key | thread | pane | session | status` for every open lane and every unregistered agent pane, followed by drift. Read-only unless `--write`, which stores session ids.
 
+### `dori report <key> --kind milestone|blocker|halted|done --text TEXT`
+Run by a lane. Appends one record to `<stateDir>/lanes/<key>/reports.jsonl` and prints the `[REPORT] <key> | <kind> | <text>` line the lane then sends to the lead pane. Each record is a single append, so the lane and the lead can write at the same time without losing one. The last record is the lane's progress state: `milestone` is running, `blocker` blocked, `halted` halted, `done` done. Text stays data: newlines are folded into the printed line, never into the journal. A corrupt journal is an error with its line number, never an empty state. Lanes opened by `dori launch` are told to report this way and are marked `reportProtocol: "jsonl-v1"`; launch writes their first milestone.
+
 ### `dori claim-done [<key>] --evidence TEXT` / `dori object-done <key> --reason TEXT ...`
 The two halves of the done flow. Both message the lane's pane and check that Enter registered.
 
@@ -86,6 +89,8 @@ Runs forever. Every 30 seconds it prints each new claim once (`LANE_DONE_CLAIMED
 
 ### `dori freshness [--loop MIN]`
 For working lanes that have gone quiet: a nudge in the pane after `nudgeAfterMin`, then the lane's last `[REPORT]` line posted to its thread after `postAfterMin`, with home paths and pane ids scrubbed. Each happens once per silence. The line is posted only once it is still the last `[REPORT]` line on the next tick (`PENDING-REPORT` the first time) and differs from the line posted last time (`STALE-REPORT` otherwise). A held-back outcome is printed once per change, not on every tick. A nudge reports its delivery as `delivered` (the agent status moved to working) or `unconfirmed`.
+
+A lane with a `reports.jsonl` journal is read from the journal first. Its last report is posted at once, since it cannot scroll off, and its time counts as the lane last being heard from, so a fresh report suppresses the nudge. A `blocker`, `halted` or `done` lane is not nudged. A `jsonl-v1` lane never falls back to scraping the screen; with no journal entry it is `NO-REPORT`. The screen is still read for activity: a compaction failure, or an idle prompt with no `Working` line and no report for `nudgeAfterMin`, marks the lane `stalled` and prints `STALLED` once; `Working` on the screen moves it back to running. Only a line that starts with `[REPORT]` (after indentation) counts on the screen, so an instruction, a prompt or an argv array that quotes the grammar is never posted.
 
 ### `dori dead-panes [--loop MIN]`
 Prints `DEAD_PANE <id>` once per hour for a pane with no running agent status whose last lines match `deadPanePatterns` on two ticks in a row with the same text. A pane herdr reports as idle, working, blocked or done is never dead. A pane that is neither is unrecognised; three unrecognised ticks in a row print `UNRECOGNISED_PANE <id> ...` once (list non-agent panes in `ignorePanes`).

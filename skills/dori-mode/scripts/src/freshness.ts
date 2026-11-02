@@ -3,6 +3,7 @@ import type { FlowDeps } from "./done-flow.ts";
 import { checkPausedLane } from "./pause.ts";
 import { readScreen, sendVerified } from "./panes.ts";
 import { type Lane, statusOf } from "./registry.ts";
+import { reportLine, Reports } from "./reports.ts";
 
 export const lastReportLine = (screen: string, key: string): string | null => {
   const grammar = new RegExp(`\\[REPORT\\] ${key.replace(/[.]/g, "\\.")} \\| (milestone|blocker|question|done) \\| (?!<what)\\S`);
@@ -20,13 +21,23 @@ export const scrubForThread = (line: string, home: string): string =>
     .replace(/`/g, "'")
     .trim();
 
-export type SweepAct = { readonly kind: "nudged" | "posted" | "no-report" | "pending-report" | "stale-report" | "working-while-paused"; readonly lane: string; readonly detail: string };
+// Only a line that starts with [REPORT] is a report. Instructions, prompts and argv arrays that quote the grammar
+// mid-line are dropped before parsing, so an example is never posted as the lane's progress.
+export const anchoredReportLine = (screen: string, key: string): string | null =>
+  lastReportLine(screen.split("\n").filter((l) => !l.includes("[REPORT]") || /^\s*\[REPORT\]/.test(l)).join("\n"), key);
+
+export type SweepAct = {
+  readonly kind: "nudged" | "posted" | "no-report" | "pending-report" | "stale-report" | "working-while-paused" | "stalled";
+  readonly lane: string;
+  readonly detail: string;
+};
 
 const lastHeard = (lane: Lane): number => lane.lastReplyAt ?? Date.parse(lane.openedAt);
 
 export const freshnessTick = async (deps: FlowDeps, home: string): Promise<SweepAct[]> => {
   const acts: SweepAct[] = [];
   const now = deps.clock.now();
+  const reports = new Reports(deps.config.stateDir);
   for (const lane of await deps.registry.open()) {
     if (statusOf(lane) === "paused") {
       const checked = await checkPausedLane(deps, lane);
@@ -38,7 +49,13 @@ export const freshnessTick = async (deps: FlowDeps, home: string): Promise<Sweep
       continue;
     }
     if (statusOf(lane) !== "working" || !lane.pane) continue;
-    const heard = lastHeard(lane);
+    const previous = reports.read(lane.key);
+    const progress = previous ? reports.observe(lane.key, await readScreen(deps.run, lane.pane), now, deps.config.nudgeAfterMin * 60_000) : null;
+    if (progress?.state === "stalled" && previous?.state !== "stalled") {
+      acts.push({ kind: "stalled", lane: lane.key, detail: progress.lastEvent.text });
+    }
+    if (progress && progress.state !== "running") continue;
+    const heard = Math.max(lastHeard(lane), progress?.lastReport ? Date.parse(progress.lastReport.at) : 0);
     const silentMin = Math.round((now - heard) / 60_000);
     let current = lane;
     if (silentMin >= deps.config.nudgeAfterMin && (current.lastNudgeAt ?? 0) < heard) {
@@ -49,13 +66,15 @@ export const freshnessTick = async (deps: FlowDeps, home: string): Promise<Sweep
     }
     const hook = deps.config.hooks.threadReply;
     if (silentMin >= deps.config.postAfterMin && hook && lane.thread !== "none" && (current.lastAutoReplyAt ?? 0) < heard) {
-      const report = lastReportLine(await readScreen(deps.run, lane.pane, 200), lane.key);
-      // The two reads are a full loop interval apart: a line counts only once it is still there on the next tick.
+      // A journal report is durable, so it posts at once; a screen-scraped line counts only once it is still there on
+      // the next tick (the two reads are a full loop interval apart).
+      const fromJournal = progress?.lastReport ? reportLine(progress.lastReport) : null;
+      const report = fromJournal ?? (lane.reportProtocol === "jsonl-v1" ? null : anchoredReportLine(await readScreen(deps.run, lane.pane, 200), lane.key));
       const seenBefore = current.lastSeenReport;
       current = { ...current, lastSeenReport: report ?? undefined };
       let hold: { kind: SweepAct["kind"]; detail: string } | null = null;
-      if (!report) hold = { kind: "no-report", detail: "pane has no [REPORT] line" };
-      else if (report !== seenBefore) hold = { kind: "pending-report", detail: "a new [REPORT] line; posting once it holds on the next tick" };
+      if (!report) hold = { kind: "no-report", detail: lane.reportProtocol === "jsonl-v1" ? "report journal has no report" : "pane has no [REPORT] line" };
+      else if (!fromJournal && report !== seenBefore) hold = { kind: "pending-report", detail: "a new [REPORT] line; posting once it holds on the next tick" };
       else if (report === current.lastPostedReport) hold = { kind: "stale-report", detail: "the last [REPORT] line was already posted" };
       if (hold) {
         const note = `${hold.kind}|${hold.detail}|${report ?? ""}`;

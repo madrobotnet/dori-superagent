@@ -10,6 +10,7 @@ import { guardTick, sampleHost } from "./host-guard.ts";
 import { adoptLane, launchLane, LaunchError } from "./launch.ts";
 import { pauseLane, resumeLane } from "./pause.ts";
 import { Registry, statusOf } from "./registry.ts";
+import { isReportKind, reportLine, ReportError, Reports } from "./reports.ts";
 import { realClock, run } from "./run.ts";
 import { syncRegistry } from "./sync.ts";
 import { canLaunch } from "./routing.ts";
@@ -28,6 +29,8 @@ const USAGE = `dori <command> [options]
   launch <key> --title T --brief FILE --done "merged o/r#N; closed o/r#M" [--thread REF] [--model M] [--cwd DIR]
   adopt  <key> --pane ID --title T --brief FILE --done "..." [--thread REF]
   sync   [--write]                     registry vs live panes; read-only unless --write
+  report <key> --kind milestone|blocker|halted|done --text TEXT
+                                       append a durable progress report and print its [REPORT] line
   claim-done [<key>] --evidence TEXT  key defaults to the lane registered for $HERDR_PANE_ID
   object-done <key> --reason TEXT [--reason TEXT ...]
   close  <key> [--note TEXT]           close now (Done signals must read back live)
@@ -63,7 +66,7 @@ const flags = parseArgs({
     title: { type: "string" }, brief: { type: "string" }, done: { type: "string" }, thread: { type: "string" },
     model: { type: "string" }, cwd: { type: "string" }, pane: { type: "string" }, evidence: { type: "string" },
     reason: { type: "string", multiple: true }, note: { type: "string" }, write: { type: "boolean" }, loop: { type: "string" },
-    to: { type: "string" }, text: { type: "string" }, edit: { type: "string" },
+    to: { type: "string" }, text: { type: "string" }, edit: { type: "string" }, kind: { type: "string" },
   },
 });
 const opt = (name: string): string | undefined => {
@@ -91,6 +94,14 @@ const every = async (minutes: number, tick: () => Promise<void>): Promise<void> 
 
 try {
   switch (command) {
+    case "report": {
+      const target = await lane(key ?? die("report needs a lane key"));
+      const kind = need("kind");
+      if (isReportKind(kind)) {
+        console.log(reportLine(new Reports(config.stateDir).report(target.key, kind, need("text"), realClock.now())));
+      } else die("--kind must be milestone, blocker, halted or done");
+      break;
+    }
     case "launch": {
       const r = await launchLane(deps, { key: key ?? "", title: need("title"), brief: need("brief"), done: need("done"), thread: opt("thread"), model: opt("model"), cwd: opt("cwd") });
       console.log(`LAUNCHED ${r.lane.key} pane=${r.lane.pane} tab=${r.lane.tab ?? "?"}`);
@@ -244,6 +255,6 @@ try {
       process.exit(command ? 1 : 0);
   }
 } catch (e) {
-  if (e instanceof LaunchError || e instanceof UnsafeMessageError || e instanceof MessengerError || e instanceof TranscriptionError) die(e.message);
+  if (e instanceof LaunchError || e instanceof UnsafeMessageError || e instanceof MessengerError || e instanceof TranscriptionError || e instanceof ReportError) die(e.message);
   throw e;
 }
