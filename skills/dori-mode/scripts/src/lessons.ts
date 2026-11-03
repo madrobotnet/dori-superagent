@@ -129,6 +129,3 @@ const LESSONS_HEADING = "## Lessons for this repo";
 export const renderLessons = (lessons: readonly Lesson[]): string => lessons.length
   ? `${LESSONS_HEADING}\n${lessons.map((lesson) => `- [${lesson.outcome}; ${lesson.lane}] ${lesson.rule}`).join("\n")}\n\n`
   : "";
-
-/** The text after a block renderLessons wrote at the top; any other text is returned unchanged. */
-export const stripRenderedLessons = (text: string): string => text.replace(new RegExp(`^${LESSONS_HEADING}\\n(?:- [^\\n]*\\n)*\\n`), "");
