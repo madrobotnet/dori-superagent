@@ -96,6 +96,17 @@ test("a torn last line does not swallow the next record", () => {
   expect(read.problems).toEqual([expect.stringContaining(`${lessons.path}:2: `)]);
 });
 
+test("a time that is not the canonical ISO form is a damaged line", () => {
+  // Given one valid record and copies whose time Date.parse accepts but toISOString never writes.
+  const added = lessons.add(input, T0);
+  const bad = ["0", "2026-10-29", "Thu, 29 Oct 2026 00:00:00 GMT", "2026-10-29T00:00:00Z"];
+  writeFileSync(lessons.path, `${readFileSync(lessons.path, "utf8")}${bad.map((at) => JSON.stringify({ ...added, id: crypto.randomUUID(), at })).join("\n")}\n`);
+  // When reading; then only the canonical record loads and each other line is named by its field.
+  const read = lessons.read();
+  expect(read.lessons).toEqual([added]);
+  expect(read.problems).toEqual(bad.map((_, i) => expect.stringContaining(`:${i + 2}: lesson field "at"`)));
+});
+
 test("a malformed or unknown field is rejected by name, and an immutable change keeps the first record", () => {
   // Given one valid record and three bad copies of it.
   const added = lessons.add(input, T0);

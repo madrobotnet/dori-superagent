@@ -27,7 +27,8 @@ const singleLine = (value: unknown, max: number): value is string =>
 const FIELDS = ["id", "at", "lane", "cwd", "rule", "evidence", "outcome"] as const;
 const fieldChecks: Record<(typeof FIELDS)[number], [(value: unknown) => boolean, string]> = {
   id: [(v) => typeof v === "string" && /^[0-9a-f-]{36}$/.test(v), "must be a UUID"],
-  at: [(v) => typeof v === "string" && Number.isFinite(Date.parse(v)), "must be an ISO time"],
+  // Only the form toISOString writes: Date.parse also takes "0" or an RFC 2822 date, which must not reach a brief.
+  at: [(v) => typeof v === "string" && Number.isFinite(Date.parse(v)) && new Date(v).toISOString() === v, "must be an ISO time as toISOString writes it"],
   lane: [(v) => typeof v === "string" && LANE_KEY.test(v), `must match ${LANE_KEY}`],
   cwd: [(v) => singleLine(v, 4096) && isAbsolute(v), "must be an absolute single-line path"],
   rule: [(v) => singleLine(v, 400), "must be one nonempty line of at most 400 characters"],
