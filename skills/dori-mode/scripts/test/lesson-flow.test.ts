@@ -97,7 +97,7 @@ test("preview is side-effect free and actual launch ships the same prepared brie
     // Then byte-for-byte shipped-copy equality protects preview/launch parity.
     expect(readFileSync(brief, "utf8")).toBe(preview.preamble);
     expect(launched.lane.pane).toBe("qa:p1");
-    expect((await deps.registry.read(lane.key))?.status ?? "working").toBe("working");
+    expect(await deps.registry.read(lane.key)).toMatchObject({ key: lane.key, pane: "qa:p1", tab: "qa:t1" });
   } finally { state.done(); }
 });
 
