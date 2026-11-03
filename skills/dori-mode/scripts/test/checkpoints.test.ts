@@ -1,6 +1,7 @@
 import { describe, expect, spyOn, test } from "bun:test";
 import * as fs from "node:fs";
-import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { hostname } from "node:os";
 import { dirname, join } from "node:path";
 
 import { CheckpointError, Checkpoints, LOCK_STALE_MS, type CheckpointInput } from "../src/checkpoints.ts";
@@ -173,6 +174,22 @@ describe("checkpoints", () => {
       expect(() => journal.write("demo-lane", next, Date.now())).toThrow("writer locked");
       journal.write("demo-lane", next, Date.now() + LOCK_STALE_MS + 1000);
       expect(journal.read("demo-lane").map((c) => c.step)).toEqual(["deploy", "next"]);
+    } finally { state.done(); }
+  });
+
+  test("a lock whose owner time cannot be read is aged by its mtime, not taken over at once", () => {
+    const state = withState();
+    try {
+      const journal = new Checkpoints(state.dir);
+      const lock = `${journal.path("demo-lane")}.lock`;
+      mkdirSync(dirname(lock), { recursive: true });
+      // A live writer on this host whose record holds an unreadable time.
+      writeFileSync(lock, JSON.stringify({ pid: process.pid, host: hostname(), at: "not a time", nonce: "n" }));
+      const changed = statSync(lock).mtimeMs;
+      expect(() => journal.write("demo-lane", input, changed + LOCK_STALE_MS - 1000)).toThrow(`writer locked: demo-lane (pid ${process.pid}`);
+      expect(journal.read("demo-lane")).toEqual([]);
+      journal.write("demo-lane", input, changed + LOCK_STALE_MS);
+      expect(journal.read("demo-lane").map((c) => c.step)).toEqual(["deploy"]);
     } finally { state.done(); }
   });
 

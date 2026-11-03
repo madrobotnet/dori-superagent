@@ -89,8 +89,8 @@ export class Checkpoints {
 
   /**
    * Take the journal's writer lock and return its release. The lock file records pid, host, time and a nonce. A live
-   * writer's lock is refused. A lock whose pid is dead on this host, or that is LOCK_STALE_MS old, or that has no
-   * owner record and was last changed that long ago, is taken over: so a writer killed mid-write never locks the lane.
+   * writer's lock is refused. A lock whose pid is dead on this host, or that is LOCK_STALE_MS old, is taken over: so a
+   * writer killed mid-write never locks the lane. A lock with no owner record or an unreadable time is aged by its mtime.
    */
   lock(key: string, now: number): () => void {
     const path = this.path(key);
@@ -134,9 +134,10 @@ export class Checkpoints {
       const seen = inspect(lock);
       if (!seen) continue;
       const owner = ownerOf(seen.raw);
-      const since = owner ? Date.parse(owner.at) : seen.mtimeMs;
+      const at = owner ? Date.parse(owner.at) : NaN;
+      const since = Number.isFinite(at) ? at : seen.mtimeMs;
       const dead = owner !== null && owner.host === hostname() && !alive(owner.pid);
-      if (!dead && Number.isFinite(since) && now - since < LOCK_STALE_MS) {
+      if (!dead && now - since < LOCK_STALE_MS) {
         throw new CheckpointError(`checkpoint writer locked: ${key} (${owner ? `pid ${owner.pid}` : "no owner record"}, ${Math.max(0, Math.round((now - since) / 1000))} s old)`);
       }
       // Move the stale lock aside under a unique name, then check it is the one judged stale: another writer may have
