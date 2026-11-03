@@ -74,7 +74,7 @@ export const adoptLane = async (deps: FlowDeps, input: LaunchInput & { readonly 
   return lane;
 };
 
-export const prepareLaunch = async (deps: FlowDeps, input: LaunchInput): Promise<{ readonly lane: Lane; readonly preamble: string }> => {
+export const prepareLaunch = async (deps: FlowDeps, input: LaunchInput): Promise<{ readonly lane: Lane; readonly preamble: string; readonly warnings: string[] }> => {
   await validateLaunch(deps, input);
   const model = input.model ?? deps.config.defaultModel;
   const cwd = input.cwd ?? deps.config.defaultCwd;
@@ -90,12 +90,17 @@ export const prepareLaunch = async (deps: FlowDeps, input: LaunchInput): Promise
     },
     activityPaths: input.activityPaths ?? [],
   };
-  const lessons = renderLessons(new Lessons(deps.config.stateDir).forRepo(cwd));
-  return { lane: draft, preamble: `${lessons}${(await briefFile.text()).replace(/\s*$/, "")}\n${footer(draft, deps.config.leadPane, deps.config.repoIdentities)}` };
+  // A damaged journal line is a warning: it must not keep a lane from starting or hide the lessons around it.
+  const { lessons, problems } = new Lessons(deps.config.stateDir).forRepo(cwd);
+  return { lane: draft, warnings: problems.map((problem) => `LESSON_WARNING ${problem}`), preamble: `${renderLessons(lessons)}${(await briefFile.text()).replace(/\s*$/, "")}\n${footer(draft, deps.config.leadPane, deps.config.repoIdentities)}` };
 };
 
-export const launchLane = async (deps: FlowDeps, input: LaunchInput): Promise<{ readonly lane: Lane; readonly startup: string }> => {
-  const { lane: draft, preamble } = await prepareLaunch(deps, input);
+export const launchLane = async (deps: FlowDeps, input: LaunchInput): Promise<{ readonly lane: Lane; readonly startup: string; readonly warnings: string[] }> => {
+  const prepared = await prepareLaunch(deps, input);
+  return { ...(await startLane(deps, input, prepared.lane, prepared.preamble)), warnings: prepared.warnings };
+};
+
+const startLane = async (deps: FlowDeps, input: LaunchInput, draft: Lane, preamble: string): Promise<{ readonly lane: Lane; readonly startup: string }> => {
   const model = input.model ?? deps.config.defaultModel;
   const cwd = input.cwd ?? deps.config.defaultCwd;
   await Bun.write(input.brief, preamble);

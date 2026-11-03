@@ -22,7 +22,7 @@ test("successful close records a pending lesson with the lane's repo", async () 
     // Then both close and lesson persist.
     expect(result.closed).toBe(true);
     expect((await deps.registry.read(lane.key))?.status).toBe("closed");
-    expect(new Lessons(state.dir).list().map(({ rule, evidence, lane, cwd, outcome }) => ({ rule, evidence, lane, cwd, outcome })))
+    expect(new Lessons(state.dir).read().lessons.map(({ rule, evidence, lane, cwd, outcome }) => ({ rule, evidence, lane, cwd, outcome })))
       .toEqual([{ ...lesson, lane: lane.key, cwd: "/repo", outcome: "pending" }]);
   } finally { state.done(); }
 });
@@ -38,7 +38,7 @@ test("failed completion gates cannot add a lesson or close a lane", async () => 
     const result = await closeLane(deps, lane, "not ready", lesson);
     // Then neither operation is performed.
     expect(result.closed).toBe(false);
-    expect(new Lessons(state.dir).list()).toEqual([]);
+    expect(new Lessons(state.dir).read().lessons).toEqual([]);
     expect(await deps.registry.read(lane.key)).toBeNull();
   } finally { state.done(); }
 });
@@ -98,5 +98,23 @@ test("preview is side-effect free and actual launch ships the same prepared brie
     expect(readFileSync(brief, "utf8")).toBe(preview.preamble);
     expect(launched.lane.pane).toBe("qa:p1");
     expect((await deps.registry.read(lane.key))?.status ?? "working").toBe("working");
+  } finally { state.done(); }
+});
+
+test("a damaged journal line does not stop a launch; the brief keeps the valid lessons and names the line", async () => {
+  // Given a valid lesson for the repo and a damaged line after it.
+  const state = withState();
+  try {
+    const deps = depsFor(newWorld(), fakeClock(T0), state.dir);
+    const brief = join(state.dir, "brief.md");
+    writeFileSync(brief, "Perform the fixture work.");
+    const journal = new Lessons(state.dir);
+    journal.add({ ...lesson, lane: lane.key, cwd: "/repo" }, T0);
+    writeFileSync(journal.path, `${readFileSync(journal.path, "utf8")}not-json\n`);
+    // When preparing the launch.
+    const prepared = await prepareLaunch(deps, { key: lane.key, title: lane.title, brief, done: lane.done, cwd: "/repo" });
+    // Then the lesson still reaches the brief and the bad line is a warning, not an abort.
+    expect(prepared.preamble).toContain(`] ${lesson.rule}`);
+    expect(prepared.warnings).toEqual([expect.stringContaining(`${journal.path}:2: `)]);
   } finally { state.done(); }
 });

@@ -141,10 +141,13 @@ try {
         activityPaths: strings("activity-path"),
       };
       if (flags.values["dry-run"]) {
-        console.log((await prepareLaunch(deps, input)).preamble);
+        const prepared = await prepareLaunch(deps, input);
+        for (const warning of prepared.warnings) console.error(warning);
+        console.log(prepared.preamble);
         break;
       }
       const r = await launchLane(deps, input);
+      for (const warning of r.warnings) console.error(warning);
       console.log(`LAUNCHED ${r.lane.key} pane=${r.lane.pane} tab=${r.lane.tab ?? "?"}`);
       console.log(r.startup);
       process.exit(r.startup.startsWith("STARTUP_OK") ? 0 : 3);
@@ -187,9 +190,12 @@ try {
           }, realClock.now())));
           break;
         }
-        case "list":
-          console.log(JSON.stringify(lessons.list(opt("cwd")), null, 2));
+        case "list": {
+          const read = lessons.read(opt("cwd"));
+          for (const problem of read.problems) console.error(`LESSON_WARNING ${problem}`);
+          console.log(JSON.stringify(read.lessons, null, 2));
           break;
+        }
         case "mark": {
           const id = flags.positionals[1] ?? die("lesson mark needs a lesson id");
           const outcome = need("outcome");

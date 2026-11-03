@@ -60,7 +60,7 @@ Every module takes its HTTP, clock and timers as arguments. That is how the test
 
 ## Commands
 
-### `dori launch <key> --title T --brief FILE --done "..." [--thread REF] [--model M] [--cwd DIR]`
+### `dori launch <key> --title T --brief FILE --done "..." [--thread REF] [--model M] [--cwd DIR] [--dry-run]`
 Opens a lane: puts the repo's lessons (below) above the brief, appends the footer, opens a tab, starts the agent, and after 20 seconds checks it: `STARTUP_ERROR` on a known failure in the pane (at that check, or on an idle agent with no goal during the goal wait), `STARTUP_OK` only when herdr reports the agent idle or working and `goalMarker` (unless that is empty) shows in the pane's footer, its last three non-empty lines, so agent output above it does not count, `STARTUP_NO_GOAL` when the agent runs but shows no goal for another 60 seconds, and `STARTUP_UNCONFIRMED` (with the last lines) otherwise. Exit 3 on anything but `STARTUP_OK`.
 
 `--dry-run` prints the brief as the lane would get it, lessons and footer included, and changes nothing.
@@ -102,7 +102,7 @@ The two halves of the done flow. Both message the lane's pane and check that Ent
 Closes a lane now. Refuses (exit 2) unless every `Done =` signal reads back live. On success it marks the thread done through `hooks.threadDone`, closes the tab, and removes the lane's worktrees with a plain `git worktree remove`, which refuses a dirty worktree.
 
 ### `dori lesson add <key> --rule TEXT --evidence PATH [--cwd DIR]` / `lesson list [--cwd DIR]` / `lesson mark <id> --outcome ...`
-A lesson is one rule learned in a lane, tied to the evidence that taught it and to the lane's repo (its `cwd`, resolved to a real path). `dori launch` puts up to 8 of the newest `pending` or `helped` lessons for the new lane's `cwd` above its brief, under "Lessons for this repo". `mark` records whether a lesson `helped`, had `no-effect`, was `harmful`, or is now `encoded` in a test, lint or doc; only `pending` and `helped` reach new briefs. Lessons live in `<stateDir>/lessons.jsonl`, one record per change: a mark appends, it never rewrites history. A rule is one line of at most 400 characters. A corrupt journal fails with its line number.
+A lesson is one rule learned in a lane, tied to the evidence that taught it and to the lane's repo (its `cwd`, resolved to a real path). `dori launch` puts up to 8 of the newest `pending` or `helped` lessons for the new lane's `cwd` above its brief, under "Lessons for this repo". `mark` records whether a lesson `helped`, had `no-effect`, was `harmful`, or is now `encoded` in a test, lint or doc; only `pending` and `helped` reach new briefs. Lessons live in `<stateDir>/lessons.jsonl`, one record per change: a mark appends, it never rewrites history. A rule is one line of at most 400 characters. A damaged line (not JSON, an unknown field, a malformed field, or a change to a lesson's fixed fields) is skipped and named: `lesson list` and `launch` print `LESSON_WARNING <path>:<line>: <reason>` on stderr, the reason naming the field, and go on with the other lessons. Each record starts on its own line, so a write cut off halfway damages only its own line.
 
 `dori close <key> --lesson TEXT [--evidence PATH]` adds a lesson as part of the close (evidence defaults to the `Done =` line). It never blocks the close: a failure prints `LESSON_WARNING`.
 

@@ -21,7 +21,7 @@ test("add persists a pending lesson and mark appends without changing the origin
   // Then history and the materialized latest state both survive a reload.
   expect(readFileSync(lessons.path, "utf8").startsWith(original)).toBe(true);
   expect(readFileSync(lessons.path, "utf8").trim().split("\n")).toHaveLength(2);
-  expect(new Lessons(state.dir).list()).toEqual([{ ...added, outcome: "helped" }]);
+  expect(new Lessons(state.dir).read().lessons).toEqual([{ ...added, outcome: "helped" }]);
   expect(updated).toEqual({ ...added, outcome: "helped" });
 });
 
@@ -36,7 +36,7 @@ test("repo selection keeps eight newest eligible lessons and excludes other cwd 
   }
   lessons.add({ ...input, cwd: "/other-repo" }, T0 + 1000);
   // When selecting for a lexically equivalent path.
-  const selected = lessons.forRepo("/repo/../repo/");
+  const selected = lessons.forRepo("/repo/../repo/").lessons;
   // Then scope, filtering, ordering and cap are all observable in record IDs.
   expect(selected.map((lesson) => lesson.id)).toEqual(eligible.slice(-8).reverse().map((lesson) => lesson.id));
 });
@@ -47,14 +47,14 @@ test("equal timestamps use newest insertion and marking old lessons does not pro
   // When the older lesson is marked.
   lessons.mark(first.id, "helped");
   // Then creation order remains the tie-breaker.
-  expect(lessons.forRepo("/repo").map((lesson) => lesson.id)).toEqual([second.id, first.id]);
+  expect(lessons.forRepo("/repo").lessons.map((lesson) => lesson.id)).toEqual([second.id, first.id]);
 });
 
 test("empty or unrelated journals yield no repo lessons", () => {
   // Given no journal; when selecting another scope; then no preamble data.
-  expect(lessons.forRepo("/repo")).toEqual([]);
+  expect(lessons.forRepo("/repo").lessons).toEqual([]);
   lessons.add(input, T0);
-  expect(lessons.forRepo("/unrelated")).toEqual([]);
+  expect(lessons.forRepo("/unrelated").lessons).toEqual([]);
 });
 
 test("invalid input and unknown IDs cannot mutate the journal", () => {
@@ -72,14 +72,47 @@ test("invalid input and unknown IDs cannot mutate the journal", () => {
   expect(readFileSync(lessons.path, "utf8")).toBe(original);
 });
 
-test("malformed JSONL and immutable field changes are reported instead of discarded", () => {
-  // Given a valid record followed by a damaged line.
+test("a damaged line is named and skipped; the lessons around it still load and add still works", () => {
+  // Given a valid record followed by a line that is not JSON.
+  const first = lessons.add(input, T0);
+  writeFileSync(lessons.path, `${readFileSync(lessons.path, "utf8")}not-json\n`);
+  // When another lesson is added and the journal is read.
+  const second = lessons.add({ ...input, rule: "Second rule" }, T0 + 1);
+  const read = lessons.read();
+  // Then both lessons load and the bad line is reported by its number.
+  expect(read.lessons.map((lesson) => lesson.id)).toEqual([second.id, first.id]);
+  expect(read.problems).toEqual([expect.stringContaining(`${lessons.path}:2: `)]);
+});
+
+test("a torn last line does not swallow the next record", () => {
+  // Given a writer that stopped halfway through a record.
+  const first = lessons.add(input, T0);
+  writeFileSync(lessons.path, `${readFileSync(lessons.path, "utf8")}{"id":"torn`);
+  // When the next lesson is added.
+  const second = lessons.add({ ...input, rule: "After the tear" }, T0 + 1);
+  // Then it lands on its own line and only the torn line is reported.
+  const read = lessons.read();
+  expect(read.lessons.map((lesson) => lesson.id)).toEqual([second.id, first.id]);
+  expect(read.problems).toEqual([expect.stringContaining(`${lessons.path}:2: `)]);
+});
+
+test("a malformed or unknown field is rejected by name, and an immutable change keeps the first record", () => {
+  // Given one valid record and three bad copies of it.
   const added = lessons.add(input, T0);
   const original = readFileSync(lessons.path, "utf8");
-  writeFileSync(lessons.path, `${original}not-json\n`);
-  // When reading or adding; then corruption fails closed with a line number.
-  expect(() => lessons.list()).toThrow(`${lessons.path}:2:`);
-  expect(() => lessons.add(input, T0)).toThrow(LessonError);
-  writeFileSync(lessons.path, `${original}${JSON.stringify({ ...added, cwd: "/other" })}\n`);
-  expect(() => lessons.list()).toThrow("immutable fields changed");
+  writeFileSync(lessons.path, [
+    original.trimEnd(),
+    JSON.stringify({ ...added, outcome: "done" }),
+    JSON.stringify({ ...added, extra: 1 }),
+    JSON.stringify({ ...added, cwd: "/other" }),
+  ].join("\n") + "\n");
+  // When reading.
+  const read = lessons.read();
+  // Then each line's problem names its field, and the first record stands.
+  expect(read.lessons).toEqual([added]);
+  expect(read.problems).toEqual([
+    expect.stringContaining(`:2: lesson field "outcome"`),
+    expect.stringContaining(`:3: unknown lesson field "extra"`),
+    expect.stringContaining(`:4: immutable fields changed for ${added.id}`),
+  ]);
 });
