@@ -101,6 +101,32 @@ test("preview is side-effect free and actual launch ships the same prepared brie
   } finally { state.done(); }
 });
 
+test("a retry after a failed tab create ships the same brief, not a second lessons block and footer", async () => {
+  // Given a brief, a lesson, and a herdr whose first tab create fails.
+  const state = withState();
+  try {
+    const world = newWorld();
+    const deps = depsFor(world, fakeClock(T0), state.dir);
+    const brief = join(state.dir, "brief.md");
+    writeFileSync(brief, "Perform the fixture work.");
+    new Lessons(state.dir).add({ ...lesson, lane: lane.key, cwd: "/repo" }, T0);
+    const input = { key: lane.key, title: lane.title, brief, done: lane.done, cwd: "/repo" };
+    const expected = (await prepareLaunch(deps, input)).preamble;
+    let creates = 0;
+    const run: typeof deps.run = async (argv, opts) =>
+      argv[0] === "herdr" && argv[1] === "tab" && argv[2] === "create"
+        ? ++creates === 1
+          ? { code: 1, out: "", err: "server busy" }
+          : { code: 0, out: JSON.stringify({ result: { root_pane: { pane_id: "qa:p1" }, tab_id: "qa:t1" } }), err: "" }
+        : deps.run(argv, opts);
+    // When the first launch fails and the lead runs it again.
+    await expect(launchLane({ ...deps, run }, input)).rejects.toThrow("herdr tab create failed");
+    await launchLane({ ...deps, run }, input);
+    // Then the shipped brief is the one a first launch would have shipped.
+    expect(readFileSync(brief, "utf8")).toBe(expected);
+  } finally { state.done(); }
+});
+
 test("a damaged journal line does not stop a launch; the brief keeps the valid lessons and names the line", async () => {
   // Given a valid lesson for the repo and a damaged line after it.
   const state = withState();

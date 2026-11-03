@@ -8,7 +8,7 @@ import { iso } from "./run.ts";
 import { Reports } from "./reports.ts";
 import { doneSyntaxErrors } from "./signals.ts";
 import type { BudgetLimits } from "./supervision.ts";
-import { Lessons, renderLessons } from "./lessons.ts";
+import { Lessons, renderLessons, stripRenderedLessons } from "./lessons.ts";
 
 export type LaunchInput = {
   readonly key: string;
@@ -49,9 +49,18 @@ export const shellQuote = (s: string): string => (/^[\w@%+=:,./-]+$/.test(s) ? s
 export const cliCommand = (path: string = fileURLToPath(new URL("./cli.ts", import.meta.url))): string => `bun ${shellQuote(path)}`;
 const CLI = cliCommand();
 
+const FOOTER_HEADING = "## Lane footer (written by dori launch)";
+
+// startLane writes the launch text over the brief before the tab exists, so a retry after a failed tab create reads a
+// brief that already has lessons and a footer. Rebuild from the text above them, so a retry ships what a first launch would.
+const originalBrief = (text: string): string => {
+  const cut = text.indexOf(`\n${FOOTER_HEADING}\n`);
+  return (cut === -1 ? text : stripRenderedLessons(text.slice(0, cut))).replace(/\s*$/, "");
+};
+
 export const footer = (lane: Lane, leadPane: string, identities: DoriConfig["repoIdentities"] = {}): string => [
   "",
-  "## Lane footer (written by dori launch)",
+  FOOTER_HEADING,
   `- Key: ${lane.key}. Work thread: ${lane.thread}.`,
   `- Done = ${lane.done}. The lane closes only when every signal reads back live.`,
   `- Persist each milestone, blocker, question, halt and completion with ${CLI} report ${lane.key} --kind milestone|blocker|question|halted|done --text "what, with evidence links". It appends reports.jsonl and prints the human [REPORT] line; send that line to pane ${leadPane || "(lead pane)"} as an argv array, never a shell string.`,
@@ -92,7 +101,7 @@ export const prepareLaunch = async (deps: FlowDeps, input: LaunchInput): Promise
   };
   // A damaged journal line is a warning: it must not keep a lane from starting or hide the lessons around it.
   const { lessons, problems } = new Lessons(deps.config.stateDir).forRepo(cwd);
-  return { lane: draft, warnings: problems.map((problem) => `LESSON_WARNING ${problem}`), preamble: `${renderLessons(lessons)}${(await briefFile.text()).replace(/\s*$/, "")}\n${footer(draft, deps.config.leadPane, deps.config.repoIdentities)}` };
+  return { lane: draft, warnings: problems.map((problem) => `LESSON_WARNING ${problem}`), preamble: `${renderLessons(lessons)}${originalBrief(await briefFile.text())}\n${footer(draft, deps.config.leadPane, deps.config.repoIdentities)}` };
 };
 
 export const launchLane = async (deps: FlowDeps, input: LaunchInput): Promise<{ readonly lane: Lane; readonly startup: string; readonly warnings: string[] }> => {
