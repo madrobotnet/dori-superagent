@@ -1,6 +1,7 @@
-import { describe, expect, test } from "bun:test";
-import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { describe, expect, spyOn, test } from "bun:test";
+import * as fs from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 
 import { CheckpointError, Checkpoints, LOCK_STALE_MS, type CheckpointInput } from "../src/checkpoints.ts";
 import { Registry } from "../src/registry.ts";
@@ -172,6 +173,35 @@ describe("checkpoints", () => {
       expect(() => journal.write("demo-lane", next, Date.now())).toThrow("writer locked");
       journal.write("demo-lane", next, Date.now() + LOCK_STALE_MS + 1000);
       expect(journal.read("demo-lane").map((c) => c.step)).toEqual(["deploy", "next"]);
+    } finally { state.done(); }
+  });
+
+  test("a release leaves the lock a stale takeover installed between its ownership check and its removal", () => {
+    const state = withState();
+    const original = fs.readFileSync;
+    try {
+      const journal = new Checkpoints(state.dir);
+      const lock = `${journal.path("demo-lane")}.lock`;
+      const release = journal.lock("demo-lane", 1000);
+      let other: (() => void) | undefined;
+      // The release reads its record back; right after that read, a second writer takes the now stale lock over.
+      const spy = spyOn(fs, "readFileSync").mockImplementation(((path: string, options: BufferEncoding) => {
+        const raw = original(path, options);
+        if (String(path).startsWith(lock)) {
+          spy.mockRestore();
+          other = new Checkpoints(state.dir).lock("demo-lane", 1000 + LOCK_STALE_MS);
+        }
+        return raw;
+      }) as typeof fs.readFileSync);
+      release();
+      spy.mockRestore();
+      expect(other).toBeDefined();
+      expect(existsSync(lock)).toBe(true);
+      expect(JSON.parse(readFileSync(lock, "utf8")).at).toBe(new Date(1000 + LOCK_STALE_MS).toISOString());
+      release(); // a release that finds the other writer's lock in place puts it back
+      expect(JSON.parse(readFileSync(lock, "utf8")).at).toBe(new Date(1000 + LOCK_STALE_MS).toISOString());
+      other!();
+      expect(readdirSync(dirname(lock))).toEqual([]);
     } finally { state.done(); }
   });
 });

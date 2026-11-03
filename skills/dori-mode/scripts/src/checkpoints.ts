@@ -106,8 +106,28 @@ export class Checkpoints {
         } finally {
           closeSync(fd);
         }
-        // A lock taken over after LOCK_STALE_MS belongs to its new owner; leave it.
-        return () => { if (inspect(lock)?.raw === record) rmSync(lock, { force: true }); };
+        // A lock taken over after LOCK_STALE_MS belongs to its new owner; leave it. Move the lock aside first, so no
+        // takeover can land between the ownership check and the removal, and remove it only if its record is ours.
+        return () => {
+          const aside = `${lock}.${process.pid}.${randomUUID()}.release`;
+          try {
+            renameSync(lock, aside);
+          } catch (error) {
+            if ((error as NodeJS.ErrnoException).code === "ENOENT") return;
+            throw error;
+          }
+          if (inspect(aside)?.raw === record) {
+            rmSync(aside, { force: true });
+            return;
+          }
+          // Another writer's lock: put it back without replacing a newer one, and never delete it.
+          try {
+            linkSync(aside, lock);
+          } catch (error) {
+            throw new CheckpointError(`checkpoint writer lock of ${key} belongs to another writer and could not be put back; it is at ${aside}: ${(error as Error).message}`);
+          }
+          rmSync(aside, { force: true });
+        };
       } catch (error) {
         if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
       }
