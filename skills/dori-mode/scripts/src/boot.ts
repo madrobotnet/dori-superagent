@@ -6,7 +6,7 @@ import { shellQuote } from "./launch.ts";
 import { listPanes, type Pane } from "./panes.ts";
 import type { Slack } from "./messenger/slack.ts";
 import { type Lane, statusOf } from "./registry.ts";
-import { type ProgressState, Reports } from "./reports.ts";
+import { type ProgressState, ReportError, Reports } from "./reports.ts";
 
 export type PaneState = "live" | "vanished" | "unassigned";
 export type Monitor = {
@@ -190,9 +190,12 @@ export const bootCheck = async (deps: BootDeps): Promise<{ exitCode: number; lin
       else if (progress) journals.push(`NO-REPORT ${lane.key} state=${progress.state} registryStatus=${statusOf(lane)} (journal holds harness activity only)`);
       else journals.push(`NO-REPORT ${lane.key} registryStatus=${statusOf(lane)} (no journal)`);
     } catch (e) {
-      // Any unreadable journal is that lane's error; the other lanes are still checked.
+      // Any unreadable journal is that lane's error; the other lanes are still checked. The message can carry a local
+      // path, so only the error kind is printed.
       failed = true;
-      journals.push(`JOURNAL-ERROR ${lane.key}: ${e instanceof Error ? e.message : String(e)}`);
+      const code = (e as NodeJS.ErrnoException | null)?.code;
+      const kind = e instanceof ReportError ? "invalid-journal" : typeof code === "string" && /^[A-Z0-9_]+$/.test(code) ? code : "unreadable";
+      journals.push(`JOURNAL-ERROR ${lane.key} kind=${kind}`);
       lanes.push(lane);
     }
   }

@@ -310,9 +310,10 @@ test("a corrupt journal is reported for its lane and does not stop the check", a
   await deps.registry.write(launched("broken"));
   deps.reports.report("broken", "milestone", "started", T0);
   writeFileSync(deps.reports.path("broken"), `${readFileSync(deps.reports.path("broken"), "utf8")}{partial\n`);
-  // When boot runs; then the lane is named, the rest still runs, and the exit is incomplete.
+  // When boot runs; then the lane is named with the error kind and no local path, the rest still runs, and the exit is incomplete.
   const result = await bootCheck(deps);
-  expect(result.lines.some((l) => l.startsWith("JOURNAL-ERROR broken:"))).toBe(true);
+  expect(result.lines).toContain("JOURNAL-ERROR broken kind=invalid-journal");
+  expect(result.lines.join("\n")).not.toContain(state.dir);
   expect(result.lines.at(-1)).toBe("BOOT incomplete read-only; nothing restarted, written or stopped");
   expect(result.exitCode).toBe(1);
 });
@@ -367,7 +368,8 @@ test("an unreadable journal of any kind is that lane's error; the other lanes ar
   deps.reports.report("b-healthy", "blocker", "needs the owner", T0);
   // When boot runs; then both lanes are listed and the run finishes incomplete.
   const result = await bootCheck(deps);
-  expect(result.lines.some((l) => l.startsWith("JOURNAL-ERROR a-broken:"))).toBe(true);
+  expect(result.lines).toContain("JOURNAL-ERROR a-broken kind=EISDIR");
+  expect(result.lines.join("\n")).not.toContain(state.dir);
   expect(result.lines).toContain("REPORT b-healthy kind=blocker at=2026-01-01T12:00:00.000Z state=blocked registryStatus=working");
   expect(result.lines.at(-1)).toBe("BOOT incomplete read-only; nothing restarted, written or stopped");
   expect(result.exitCode).toBe(1);
