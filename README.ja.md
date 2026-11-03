@@ -203,7 +203,7 @@ dori は omo と同じやり方で匿名の利用回数を送ります。OTLP/HT
 
 ## テスト
 
-リポジトリのルートで `bun test ./test/` を実行すると、ハーネスの 57 個のテストが走ります。モデルは呼びません。素の `bun test` だと Dori モードのテストも拾います。
+リポジトリのルートで `bun test ./test/` を実行すると、ハーネスの 76 個のテストが走ります。モデルは呼びません。素の `bun test` だと Dori モードのテストも拾います。
 
 ハーネスのユニットテスト 8 個（`test/harness.test.ts`）は偽の herdr（`test/fake.ts`）に対して走ります。`herdr` と `gh` のバイナリの代わりを務めるレコーダーで、エージェント状態を設定できるペインを持ち、テストから進められる時計を持っています。カバーするのは、lane の開始と READY、忙しい lead に対するキューと一括配信、未知の宛先の拒否、10 分と 20 分の催促と 40 分のエスカレーションと WAITING の lane の放置、working と lost の状態、マージゲートの全分岐（receipt なし、BLOCK、空のチェック一覧、赤いチェック、全部スキップ、CLEAR とグリーン）、そして VERDICT 行のないレビュアーです。
 
@@ -213,7 +213,7 @@ dori は omo と同じやり方で匿名の利用回数を送ります。OTLP/HT
 
 エンドツーエンドテスト 2 個（`test/e2e.test.ts`）のうち 1 個目は、隔離した名前付きセッションで本物の herdr サーバーを起動し、ワークスペースを作り、lead ペインを登録して、omo の代わりに `test/fixtures/fake-agent.sh` をエージェントにした lane を開始します。このスクリプトは brief を読んで `dori report` と `dori ready` を呼び、テストは `[START]`、`[REPORT]`、`[READY]` が lead ペインに届くことと、`dori done` が lane を閉じることを確認します。2 個目はバックログに項目を足して `dori loop --once` を実行し、ループが始めた lane が READY まで行くこと、`[LOOP ...]` が lead ペインに届くこと、`dori loop stop` の後の実行が何もしないことを確認します。どちらも PATH に `herdr` がなければスキップされ、`DORI_TELEMETRY=0` で走ります。`bun run typecheck` は `tsc --noEmit` を実行します。
 
-Dori モードには、偽の herdr、git、gh に対する独自のテストが 253 個あります。
+Dori モードには、偽の herdr、git、gh に対する独自のテストが 254 個あります。
 
 ```sh
 cd skills/dori-mode/scripts && bun install && bun test

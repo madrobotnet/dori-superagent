@@ -203,7 +203,7 @@ dori sends anonymous usage counts the same way omo does: OTLP/HTTP JSON logs to 
 
 ## Tests
 
-`bun test ./test/` at the repo root runs the harness's 57 tests and calls no model. Plain `bun test` would also pick up the Dori mode tests.
+`bun test ./test/` at the repo root runs the harness's 76 tests and calls no model. Plain `bun test` would also pick up the Dori mode tests.
 
 Eight harness unit tests (`test/harness.test.ts`) run against a fake herdr (`test/fake.ts`): a recorder that stands in for the `herdr` and `gh` binaries, holds panes with a settable agent status, and has a clock the tests move. They cover lane start and READY, the queue-and-batch behaviour of a busy lead, refused unknown targets, nudges at 10 and 20 with escalation at 40 and WAITING lanes left alone, the working and lost states, every branch of the merge gate (no receipt, BLOCK, empty check list, a red check, all checks skipped, CLEAR plus green), and a reviewer with no VERDICT line.
 
@@ -213,7 +213,7 @@ Eleven telemetry unit tests (`test/telemetry.test.ts`) cover the opt-out; the no
 
 Two end-to-end tests (`test/e2e.test.ts`). The first starts a real herdr server in an isolated named session, creates a workspace, registers a lead pane, and starts a lane whose agent is `test/fixtures/fake-agent.sh` in place of omo. The script reads its brief, calls `dori report` and `dori ready`, and the test checks that `[START]`, `[REPORT]` and `[READY]` arrive in the lead pane and that `dori done` closes the lane. The second adds a backlog item, runs `dori loop --once`, and checks that the lane it starts reaches READY, that `[LOOP ...]` reaches the lead pane, and that `dori loop stop` makes the next run do nothing. Both are skipped when `herdr` is not on PATH and run with `DORI_TELEMETRY=0`. `bun run typecheck` runs `tsc --noEmit`.
 
-Dori mode has its own 253 tests, against fake herdr, git and gh:
+Dori mode has its own 254 tests, against fake herdr, git and gh:
 
 ```sh
 cd skills/dori-mode/scripts && bun install && bun test
