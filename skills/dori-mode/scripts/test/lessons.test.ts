@@ -107,6 +107,17 @@ test("a time that is not the canonical ISO form is a damaged line", () => {
   expect(read.problems).toEqual(bad.map((_, i) => expect.stringContaining(`:${i + 2}: lesson field "at"`)));
 });
 
+test("an id that is not the lowercase UUID randomUUID writes is a damaged line", () => {
+  // Given one valid record and copies with ids of the right length but the wrong shape.
+  const added = lessons.add(input, T0);
+  const bad = ["-".repeat(36), "0".repeat(36), crypto.randomUUID().toUpperCase()];
+  writeFileSync(lessons.path, `${readFileSync(lessons.path, "utf8")}${bad.map((id) => JSON.stringify({ ...added, id })).join("\n")}\n`);
+  // When reading; then only the real record loads and each other line is named by its field.
+  const read = lessons.read();
+  expect(read.lessons).toEqual([added]);
+  expect(read.problems).toEqual(bad.map((_, i) => expect.stringContaining(`:${i + 2}: lesson field "id"`)));
+});
+
 test("a malformed or unknown field is rejected by name, and an immutable change keeps the first record", () => {
   // Given one valid record and three bad copies of it.
   const added = lessons.add(input, T0);
