@@ -30,6 +30,7 @@ test("CLI add/list/mark survives separate processes and rejects invalid outcomes
     const marked = await invoke("lesson", "mark", stored.id, "--outcome", "helped");
     // Then returned JSON, reloaded JSONL and filtered CLI listing agree.
     expect(marked.code).toBe(0);
+    expect(JSON.parse(marked.out)).toEqual({ ...stored, outcome: "helped" });
     const listed = await invoke("lesson", "list", "--cwd", state.dir);
     expect(listed.code).toBe(0);
     expect(JSON.parse(listed.out)).toEqual([{ ...stored, outcome: "helped" }]);
