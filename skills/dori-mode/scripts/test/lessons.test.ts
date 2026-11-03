@@ -135,6 +135,6 @@ test("a malformed or unknown field is rejected by name, and an immutable change 
   expect(read.problems).toEqual([
     expect.stringContaining(`:2: lesson field "outcome"`),
     expect.stringContaining(`:3: unknown lesson field "extra"`),
-    expect.stringContaining(`:4: immutable fields changed for ${added.id}`),
+    expect.stringContaining(`:4: lesson field "cwd" changed for ${added.id}`),
   ]);
 });

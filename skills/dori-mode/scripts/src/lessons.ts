@@ -25,6 +25,7 @@ const singleLine = (value: unknown, max: number): value is string =>
   typeof value === "string" && value.trim().length > 0 && value.length <= max && !/[\x00-\x1f\x7f]/.test(value);
 
 const FIELDS = ["id", "at", "lane", "cwd", "rule", "evidence", "outcome"] as const;
+const IMMUTABLE = ["at", "lane", "cwd", "rule", "evidence"] as const;
 const fieldChecks: Record<(typeof FIELDS)[number], [(value: unknown) => boolean, string]> = {
   id: [(v) => typeof v === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(v), "must be a lowercase UUID as randomUUID writes it"],
   // Only the form toISOString writes: Date.parse also takes "0" or an RFC 2822 date, which must not reach a brief.
@@ -72,10 +73,8 @@ export class Lessons {
       try {
         const lesson = parseLesson(JSON.parse(line));
         const previous = latest.get(lesson.id);
-        if (previous && (previous.at !== lesson.at || previous.lane !== lesson.lane ||
-            previous.cwd !== lesson.cwd || previous.rule !== lesson.rule || previous.evidence !== lesson.evidence)) {
-          throw new LessonError(`immutable fields changed for ${lesson.id}`);
-        }
+        const changed = previous && IMMUTABLE.find((name) => previous[name] !== lesson[name]);
+        if (changed) throw new LessonError(`lesson field "${changed}" changed for ${lesson.id}; it is fixed once recorded`);
         latest.set(lesson.id, lesson);
       } catch (error) {
         if (!(error instanceof SyntaxError || error instanceof LessonError)) throw error;
