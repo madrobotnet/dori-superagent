@@ -29,6 +29,7 @@ import { realTimers } from "./messenger/typing.ts";
 import { transcribe, TranscriptionError } from "./messenger/voice.ts";
 import { formatVerifyPr, verifyPr } from "./verify-pr.ts";
 import { CheckpointError, Checkpoints } from "./checkpoints.ts";
+import { Worklog, WorklogError } from "./worklog.ts";
 
 const USAGE = `dori <command> [options]
 
@@ -36,7 +37,7 @@ const USAGE = `dori <command> [options]
          [--wall-minutes N|none] [--token-limit N|none] [--cost-limit N|none] [--activity-path FILE ...] [--dry-run]
   adopt  <key> --pane ID --title T --brief FILE --done "..." [--thread REF]
   sync   [--write]                     registry vs live panes; read-only unless --write
-  boot                                 read-only check after a restart: Slack auth, vanished panes, journals, stale watches
+  boot                                 read-only check after a restart: Slack auth, vanished panes, journals, open worklog items, stale watches
   report <key> --kind milestone|blocker|question|halted|done --text TEXT
                                        append a durable progress report and print its [REPORT] line
   checkpoint <key> --step ID --result TEXT --evidence PATH [--remote-effect RECEIPT]...
@@ -49,6 +50,10 @@ const USAGE = `dori <command> [options]
   lesson add <key> --rule TEXT --evidence PATH [--cwd DIR]
   lesson list [--cwd DIR]             show current lessons, newest first
   lesson mark <id> --outcome pending|helped|no-effect|harmful|encoded
+  worklog add <title> --source REF     record an owner request when it arrives
+  worklog next|note <id> <text>        set the item's next step, or add a note (a decision, an owner)
+  worklog close <id> --result TEXT     close the item with what came of it
+  worklog list [--open]                items as JSON; <stateDir>/worklog.md holds the same for reading
   close  <key> [--note TEXT] [--lesson TEXT] [--evidence PATH]
                                        close now (Done signals must read back live); an optional lesson never blocks it
   pause  <key> [--note TEXT]           the owner said wait: goal paused (read back), running turn stopped, no nudges; exit 3 if unconfirmed
@@ -88,6 +93,7 @@ const flags = parseArgs({
     "wall-minutes": { type: "string" }, "token-limit": { type: "string" }, "cost-limit": { type: "string" },
     "activity-path": { type: "string", multiple: true },
     rule: { type: "string" }, outcome: { type: "string" }, lesson: { type: "string" }, "dry-run": { type: "boolean" },
+    source: { type: "string" }, open: { type: "boolean" },
   },
 });
 const opt = (name: string): string | undefined => {
@@ -173,6 +179,7 @@ try {
       const r = await bootCheck({
         ...deps,
         reports: new Reports(config.stateDir),
+        worklog: new Worklog(config.stateDir),
         slack: slackAuthCheck(slack),
         monitorDirs: sessionDirs.flatMap((dir) => (dir ? [join(dir, "extensions", "terminal")] : [])),
       });
@@ -206,6 +213,35 @@ try {
         }
         default:
           die("lesson needs add, list or mark");
+      }
+      break;
+    }
+    case "worklog": {
+      const worklog = new Worklog(config.stateDir);
+      const id = () => flags.positionals[1] ?? die(`worklog ${key} needs an item id`);
+      const text = () => flags.positionals.slice(2).join(" ").trim() || die(`worklog ${key} needs text`);
+      const now = realClock.now();
+      switch (key) {
+        case "add":
+          console.log(JSON.stringify(worklog.add(flags.positionals.slice(1).join(" ").trim() || die("worklog add needs a title"), need("source"), now)));
+          break;
+        case "next":
+          console.log(JSON.stringify(worklog.next(id(), text(), now)));
+          break;
+        case "note":
+          console.log(JSON.stringify(worklog.note(id(), text(), now)));
+          break;
+        case "close":
+          console.log(JSON.stringify(worklog.close(id(), need("result"), now)));
+          break;
+        case "list": {
+          const read = worklog.read();
+          for (const problem of read.problems) console.error(`WORKLOG_WARNING ${problem}`);
+          console.log(JSON.stringify(flags.values.open ? read.items.filter((item) => item.closedAt === undefined) : read.items, null, 2));
+          break;
+        }
+        default:
+          die("worklog needs add, next, note, close or list");
       }
       break;
     }
@@ -392,6 +428,6 @@ try {
       process.exit(command ? 1 : 0);
   }
 } catch (e) {
-  if (e instanceof LaunchError || e instanceof UnsafeMessageError || e instanceof MessengerError || e instanceof TranscriptionError || e instanceof ReportError || e instanceof CheckpointError || e instanceof LessonError) die(e.message);
+  if (e instanceof LaunchError || e instanceof UnsafeMessageError || e instanceof MessengerError || e instanceof TranscriptionError || e instanceof ReportError || e instanceof CheckpointError || e instanceof LessonError || e instanceof WorklogError) die(e.message);
   throw e;
 }

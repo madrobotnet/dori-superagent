@@ -7,6 +7,7 @@ import { listPanes, type Pane } from "./panes.ts";
 import type { Slack } from "./messenger/slack.ts";
 import { type Lane, statusOf } from "./registry.ts";
 import { type ProgressState, ReportError, Reports } from "./reports.ts";
+import { type Worklog, worklogLines } from "./worklog.ts";
 
 export type PaneState = "live" | "vanished" | "unassigned";
 export type Monitor = {
@@ -28,6 +29,7 @@ export type Cleanup = { readonly monitorId: string; readonly sessionId: string; 
 export type SlackCheck = () => Promise<{ readonly userId: string; readonly teamId: string } | null>;
 export type BootDeps = Pick<FlowDeps, "run" | "registry" | "config" | "clock"> & {
   readonly reports: Reports;
+  readonly worklog: Worklog;
   /** null when no Slack token is configured; boot then skips the check. */
   readonly slack: SlackCheck;
   readonly monitorDirs?: readonly string[];
@@ -218,6 +220,18 @@ export const bootCheck = async (deps: BootDeps): Promise<{ exitCode: number; lin
     if (result.unregistered.length) lines.push(`UNREGISTERED ${result.unregistered.join(" ")}`);
   }
   lines.push(...journals);
+  // The lead's open requests, each with its Next line, so a compacted lead resumes from the record, not from memory.
+  try {
+    const read = deps.worklog.read();
+    lines.push(...worklogLines(read.items));
+    for (const problem of read.problems) {
+      failed = true;
+      lines.push(`WORKLOG damaged ${problem}`);
+    }
+  } catch {
+    failed = true;
+    lines.push(`WORKLOG unreadable ${shellQuote(deps.worklog.path)}`);
+  }
   const { manifests, errors } = readMonitorManifests(deps.config.sessionsDir, deps.monitorDirs);
   for (const path of errors) {
     failed = true;
