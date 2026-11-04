@@ -47,7 +47,9 @@ const USAGE = `dori <command> [options]
   claim-done [<key>] --evidence TEXT  key defaults to the lane registered for $HERDR_PANE_ID
   object-done <key> --reason TEXT [--reason TEXT ...]
   lesson add <key> --rule TEXT --evidence PATH [--cwd DIR]
-  lesson list [--cwd DIR]             show current lessons, newest first
+  lesson add [<key>] --global --rule TEXT --evidence REF
+                                       a lesson for every lane, whatever its repo
+  lesson list [--cwd DIR]             show current lessons (global ones included), newest first
   lesson mark <id> --outcome pending|helped|no-effect|harmful|encoded
   close  <key> [--note TEXT] [--lesson TEXT] [--evidence PATH]
                                        close now (Done signals must read back live); an optional lesson never blocks it
@@ -88,6 +90,7 @@ const flags = parseArgs({
     "wall-minutes": { type: "string" }, "token-limit": { type: "string" }, "cost-limit": { type: "string" },
     "activity-path": { type: "string", multiple: true },
     rule: { type: "string" }, outcome: { type: "string" }, lesson: { type: "string" }, "dry-run": { type: "boolean" },
+    global: { type: "boolean" },
   },
 });
 const opt = (name: string): string | undefined => {
@@ -183,10 +186,17 @@ try {
       const lessons = new Lessons(config.stateDir);
       switch (key) {
         case "add": {
-          const laneKey = flags.positionals[1] ?? die("lesson add needs a lane key");
-          const target = await deps.registry.read(laneKey) ?? die(`no registered lane "${laneKey}"`);
+          const laneKey = flags.positionals[1];
+          const target = laneKey === undefined ? undefined : await deps.registry.read(laneKey) ?? die(`no registered lane "${laneKey}"`);
+          if (flags.values.global) {
+            // A rule the lead keeps for every lane needs no lane; it is recorded as the lead's.
+            if (opt("cwd") !== undefined) die("a --global lesson has no --cwd");
+            console.log(JSON.stringify(lessons.add({ lane: target?.key ?? "lead", scope: "global", rule: need("rule"), evidence: need("evidence") }, realClock.now())));
+            break;
+          }
+          const repoLane = target ?? die("lesson add needs a lane key, or --global");
           console.log(JSON.stringify(lessons.add({
-            lane: laneKey, cwd: opt("cwd") ?? target.cwd ?? config.defaultCwd,
+            lane: repoLane.key, cwd: opt("cwd") ?? repoLane.cwd ?? config.defaultCwd,
             rule: need("rule"), evidence: need("evidence"),
           }, realClock.now())));
           break;

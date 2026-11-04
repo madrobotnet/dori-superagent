@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { readFileSync, writeFileSync } from "node:fs";
 
-import { LessonError, Lessons } from "../src/lessons.ts";
+import { LessonError, Lessons, renderLessons } from "../src/lessons.ts";
 import { withState } from "./fakes.ts";
 
 const T0 = Date.parse("2026-10-29T00:00:00Z");
@@ -136,5 +136,46 @@ test("a malformed or unknown field is rejected by name, and an immutable change 
     expect.stringContaining(`:2: lesson field "outcome"`),
     expect.stringContaining(`:3: unknown lesson field "extra"`),
     expect.stringContaining(`:4: lesson field "cwd" changed for ${added.id}`),
+  ]);
+});
+
+test("a global lesson reaches every repo and shares the eight-line cap; retired ones drop out", () => {
+  // Given a global rule, a retired global rule, and more repo lessons than the cap, all newer than the global rule.
+  const global = lessons.add({ lane: "lead", scope: "global", rule: "Clean up heavy job data right away", evidence: "slack:D1/1.1" }, T0);
+  lessons.mark(lessons.add({ lane: "lead", scope: "global", rule: "Retired rule", evidence: "slack:D1/1.2" }, T0 + 1).id, "harmful");
+  const repo = Array.from({ length: 8 }, (_, i) => lessons.add({ ...input, rule: `Rule ${i}` }, T0 + 10 + i));
+  // When selecting for this repo and for an unrelated one.
+  const here = lessons.forRepo("/repo").lessons;
+  const elsewhere = lessons.forRepo("/unrelated").lessons;
+  // Then the cap keeps the eight newest of both kinds, and the global rule alone reaches the other repo.
+  expect(here.map((lesson) => lesson.id)).toEqual(repo.slice().reverse().map((lesson) => lesson.id));
+  expect(elsewhere.map((lesson) => lesson.id)).toEqual([global.id]);
+  expect(global).toEqual({ id: global.id, at: new Date(T0).toISOString(), lane: "lead", scope: "global", rule: "Clean up heavy job data right away", evidence: "slack:D1/1.1", outcome: "pending" });
+  expect("cwd" in global).toBe(false);
+});
+
+test("the brief preamble puts global lessons under their own heading above the repo lessons", () => {
+  // Given one global and one repo lesson.
+  lessons.add(input, T0);
+  lessons.add({ lane: "lead", scope: "global", rule: "Never change the global Git identity", evidence: "slack:D1/2.1" }, T0 + 1);
+  // When rendered for the repo; then each kind has its section, global first.
+  expect(renderLessons(lessons.forRepo("/repo").lessons)).toBe(
+    "## Lessons for every lane\n- [pending; lead] Never change the global Git identity\n\n## Lessons for this repo\n- [pending; demo-lane] Subscribe before triggering\n\n",
+  );
+});
+
+test("a global lesson with a cwd, or a scope other than global, is a damaged line", () => {
+  // Given one valid global record and two bad copies.
+  const added = lessons.add({ lane: "lead", scope: "global", rule: "Read the thread first", evidence: "slack:D1/3.1" }, T0);
+  writeFileSync(lessons.path, `${readFileSync(lessons.path, "utf8")}${[
+    JSON.stringify({ ...added, id: crypto.randomUUID(), cwd: "/repo" }),
+    JSON.stringify({ ...added, id: crypto.randomUUID(), scope: "repo", cwd: "/repo" }),
+  ].join("\n")}\n`);
+  // When reading; then only the valid record loads and each other line is named.
+  const read = lessons.read();
+  expect(read.lessons).toEqual([added]);
+  expect(read.problems).toEqual([
+    expect.stringContaining(':2: a global lesson has no field "cwd"'),
+    expect.stringContaining(':3: lesson field "scope" must be "global" or absent'),
   ]);
 });

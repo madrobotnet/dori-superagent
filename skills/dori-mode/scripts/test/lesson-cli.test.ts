@@ -69,3 +69,28 @@ test("CLI list and launch --dry-run name a damaged line, keep going, and write n
     expect(existsSync(join(state.dir, "lanes"))).toBe(false);
   } finally { state.done(); }
 });
+
+test("CLI add --global needs no lane, reaches a launch in any repo, and refuses --cwd", async () => {
+  // Given a state dir with no lanes and a brief.
+  const state = withState();
+  try {
+    const config = join(state.dir, "config.json");
+    writeFileSync(config, JSON.stringify({ stateDir: state.dir, defaultCwd: state.dir, hooks: {} }));
+    const brief = join(state.dir, "brief.md");
+    writeFileSync(brief, "Do the work.");
+    const invoke = (...args: string[]) => run(["env", `DORI_CONFIG=${config}`, `DORI_STATE_DIR=${state.dir}`, process.execPath, cli, ...args]);
+    // When the lead adds a global lesson and previews a launch.
+    const added = await invoke("lesson", "add", "--global", "--rule", "Delete bulky job data once results are saved", "--evidence", "slack:D1/4.1");
+    const preview = await invoke("launch", "qa-new", "--title", "QA", "--brief", brief, "--done", "merged acme/app#1", "--dry-run");
+    // Then the lesson is the lead's, the brief carries it, and a --cwd or a missing lane key without --global fails.
+    expect(added.code).toBe(0);
+    expect(JSON.parse(added.out)).toEqual(new Lessons(state.dir).read().lessons[0]);
+    expect(JSON.parse(added.out)).toMatchObject({ lane: "lead", scope: "global", outcome: "pending" });
+    expect(preview.code).toBe(0);
+    expect(preview.out).toContain("## Lessons for every lane\n- [pending; lead] Delete bulky job data once results are saved\n\n");
+    const before = readFileSync(new Lessons(state.dir).path, "utf8");
+    expect((await invoke("lesson", "add", "--global", "--cwd", state.dir, "--rule", "x", "--evidence", "y")).code).toBe(1);
+    expect((await invoke("lesson", "add", "--rule", "x", "--evidence", "y")).code).toBe(1);
+    expect(readFileSync(new Lessons(state.dir).path, "utf8")).toBe(before);
+  } finally { state.done(); }
+});
