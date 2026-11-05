@@ -24,8 +24,9 @@ export class WorklogError extends Error {}
 export const WORKLOG_MARKER = "<!-- written by dori worklog from worklog.jsonl; change it with the command -->";
 
 const ID = /^[0-9a-f]{8}$/;
+// C0 and C1 controls (C1 holds U+0085 NEL and the CSI \x9b), DEL, and the Unicode line and paragraph separators.
 const singleLine = (value: unknown, max: number): value is string =>
-  typeof value === "string" && value.trim().length > 0 && value.length <= max && !/[\x00-\x1f\x7f]/.test(value);
+  typeof value === "string" && value.trim().length > 0 && value.length <= max && !/[\x00-\x1f\x7f-\x9f\u2028\u2029]/.test(value);
 const isoTime = (value: unknown): value is string =>
   typeof value === "string" && Number.isFinite(Date.parse(value)) && new Date(value).toISOString() === value;
 
@@ -109,6 +110,8 @@ export class Worklog {
           continue;
         }
         if (!item) throw new WorklogError(`worklog item ${event.id} was never added`);
+        // Two writers can both see the item open and append; the first close wins and anything after it is flagged.
+        if (item.closedAt !== undefined) throw new WorklogError(`worklog item ${event.id} was already closed; ${event.op} ignored`);
         if (event.op === "next") items.set(event.id, { ...item, next: event.text });
         else if (event.op === "note") items.set(event.id, { ...item, notes: [...item.notes, { at: event.at, text: event.text }] });
         else items.set(event.id, { ...item, closedAt: event.at, result: event.result });
@@ -148,7 +151,7 @@ export class Worklog {
 
   /** Rewrite worklog.md from the whole record: temp file + rename, so a reader never sees half a file. */
   private render(): WorklogRead {
-    const text = renderUntilStable(() => readFileSync(this.path, "utf8"), (record) => {
+    const text = renderUntilStable(() => readFileSync(this.path), (record) => {
       const tmp = `${this.markdownPath}.${process.pid}.${randomUUID()}.tmp`;
       try {
         writeFileSync(tmp, renderWorklog(this.fold(record).items), { encoding: "utf8", mode: 0o600 });
@@ -164,13 +167,15 @@ export class Worklog {
 /**
  * Publish a view of an append-only record until the record stopped growing during the publish. Another writer that
  * appended meanwhile may have published before us, leaving our older view last, so we publish again. The last publish
- * to finish therefore always holds every record, without a lock.
+ * to finish therefore always holds every record, without a lock. The sizes are compared in bytes as read: decoding a
+ * line cut inside a multi-byte character changes its length, and the sizes would then never match.
  */
-export const renderUntilStable = (read: () => string, publish: (record: string) => void, size: () => number): string => {
+export const renderUntilStable = (read: () => Buffer, publish: (record: string) => void, size: () => number): string => {
   for (;;) {
-    const record = read();
+    const bytes = read();
+    const record = bytes.toString("utf8");
     publish(record);
-    if (size() === Buffer.byteLength(record)) return record;
+    if (size() === bytes.length) return record;
   }
 };
 
@@ -194,6 +199,6 @@ export const worklogLines = (items: readonly WorklogItem[]): string[] => {
   const open = items.filter((item) => item.closedAt === undefined);
   return [
     `WORKLOG open=${open.length}`,
-    ...open.map((item) => `OPEN ${item.id} ${JSON.stringify(item.title)} source=${item.source} next=${JSON.stringify(item.next ?? "")}`),
+    ...open.map((item) => `OPEN ${item.id} ${JSON.stringify(item.title)} source=${JSON.stringify(item.source)} next=${JSON.stringify(item.next ?? "")}`),
   ];
 };

@@ -186,8 +186,8 @@ test("boot prints each open worklog item with its Next line, skips closed ones, 
   const at = result.lines.indexOf("WORKLOG open=2");
   expect(result.lines.slice(at, at + 3)).toEqual([
     "WORKLOG open=2",
-    `OPEN ${release.id} "Ship the release notes" source=slack:D1/100.1 next="wait for CI on #12, then merge"`,
-    `OPEN ${fresh.id} "Look at the flaky upload test" source=slack:D1/100.2 next=""`,
+    `OPEN ${release.id} "Ship the release notes" source="slack:D1/100.1" next="wait for CI on #12, then merge"`,
+    `OPEN ${fresh.id} "Look at the flaky upload test" source="slack:D1/100.2" next=""`,
   ]);
   expect(result.lines.some((l) => l.includes(old.id))).toBe(false);
   expect(snapshot(state.dir)).toEqual(before);
@@ -200,9 +200,19 @@ test("a damaged worklog line is named and makes boot incomplete; the other items
   writeFileSync(deps.worklog.path, `${readFileSync(deps.worklog.path, "utf8")}{"op":"add"`);
   // When boot runs; then the item prints, the bad line is named, and the exit is 1.
   const result = await bootCheck(deps);
-  expect(result.lines).toContain(`OPEN ${item.id} "Keep this" source=slack:D1/100.1 next=""`);
+  expect(result.lines).toContain(`OPEN ${item.id} "Keep this" source="slack:D1/100.1" next=""`);
   expect(result.lines).toContain(`WORKLOG damaged ${deps.worklog.path}:2: JSON Parse error: Expected '}'`);
   expect(result.exitCode).toBe(1);
+});
+
+test("a worklog source that spells out fields of its own stays one quoted value on its OPEN line", async () => {
+  // Given an item whose source tries to add a next field and a second OPEN item.
+  const deps = bootDeps(newWorld());
+  const item = deps.worklog.add("Real request", 'x next="done" OPEN deadbeef', T0);
+  // When boot runs; then the source is printed quoted, so the line still has exactly one source and one next.
+  const result = await bootCheck(deps);
+  expect(result.lines).toContain(`OPEN ${item.id} "Real request" source="x next=\\"done\\" OPEN deadbeef" next=""`);
+  expect(result.lines.filter((line) => line.startsWith("OPEN "))).toHaveLength(1);
 });
 
 test("a closed lane owns no pane, so a pane left behind by a failed close is unregistered", async () => {

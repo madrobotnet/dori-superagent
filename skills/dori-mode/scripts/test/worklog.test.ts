@@ -110,7 +110,7 @@ test("a render that raced another writer's append publishes again, so the last v
   let record = "a\n";
   const published: string[] = [];
   // When we publish; then our stale view is followed by a full one, so the last view holds both records.
-  const final = renderUntilStable(() => record, (view) => {
+  const final = renderUntilStable(() => Buffer.from(record), (view) => {
     if (!published.length) {
       record += "b\n";
       published.push(record);
@@ -119,6 +119,71 @@ test("a render that raced another writer's append publishes again, so the last v
   }, () => Buffer.byteLength(record));
   expect(published).toEqual(["a\nb\n", "a\n", "a\nb\n"]);
   expect(final).toBe("a\nb\n");
+});
+
+test("a record cut off inside a multi-byte character renders once, and later CLI changes do not hang", async () => {
+  // Given a record whose last line stops after the first byte of a three-byte character.
+  const cut = Buffer.concat([Buffer.from('{"op":"add","title":"'), Buffer.from("一").subarray(0, 1)]);
+  const views: string[] = [];
+  // When rendering it; then it is published once, since the sizes are compared in bytes, not after decoding.
+  renderUntilStable(() => cut, (view) => {
+    views.push(view);
+    if (views.length > 3) throw new Error("rendered again and again");
+  }, () => cut.length);
+  expect(views).toHaveLength(1);
+  // And given the same tear in a real record, each later CLI change finishes well inside its timeout.
+  const state = withState();
+  try {
+    const log = new Worklog(state.dir);
+    const kept = log.add("한글 제목", "slack:D1/5.1", T0);
+    writeFileSync(log.path, Buffer.concat([readFileSync(log.path), cut]));
+    cliIn(state.dir);
+    const invoke = (...args: string[]) => run(["env", `DORI_CONFIG=${join(state.dir, "config.json")}`, `DORI_STATE_DIR=${state.dir}`, process.execPath, cli, ...args], { timeoutMs: 10_000 });
+    const added = await invoke("worklog", "add", "새 요청", "--source", "slack:D1/5.2");
+    expect([added.code, added.err]).toEqual([0, ""]);
+    const id = (JSON.parse(added.out) as { id: string }).id;
+    expect((await invoke("worklog", "next", kept.id, "다음")).code).toBe(0);
+    expect((await invoke("worklog", "close", id, "--result", "끝")).code).toBe(0);
+    expect(log.open().map((item) => [item.id, item.next])).toEqual([[kept.id, "다음"]]);
+    expect(readFileSync(log.markdownPath, "utf8")).toContain(`### ${id} 새 요청`);
+  } finally { state.done(); }
+}, 40_000);
+
+test("C1 controls, NEL and the Unicode line and paragraph separators are refused in a text and in the record", () => {
+  // Given an empty worklog.
+  const state = withState();
+  try {
+    const log = new Worklog(state.dir);
+    // When adding a title holding each; then each is refused and nothing is written.
+    for (const bad of ["\x80", "\x85", "\x9b", "\x9f", "\u2028", "\u2029"]) {
+      expect(() => log.add(`before${bad}after`, "slack:D1/6.1", T0)).toThrow(WorklogError);
+    }
+    expect(existsSync(log.path)).toBe(false);
+    // And a record line holding one, written by hand, is skipped and named.
+    writeFileSync(log.path, `${JSON.stringify({ op: "add", id: "0000beef", at: new Date(T0).toISOString(), title: "a\u2028b", source: "s" })}\n`);
+    const read = log.read();
+    expect(read.items).toEqual([]);
+    expect(read.problems).toEqual([`${log.path}:1: worklog field "title" must be one nonempty line of at most 200 characters`]);
+  } finally { state.done(); }
+});
+
+test("when two writers close one item, the first close wins and the second, and any change after it, is flagged", () => {
+  // Given an item closed once, then a second close and a note appended by writers that saw it still open.
+  const state = withState();
+  try {
+    const log = new Worklog(state.dir);
+    const item = log.add("Reply to the owner", "slack:D1/7.1", T0);
+    log.close(item.id, "first answer", T0 + 1);
+    const late = (op: string, field: string, text: string, at: number) => JSON.stringify({ op, id: item.id, at: new Date(at).toISOString(), [field]: text });
+    writeFileSync(log.path, `${readFileSync(log.path, "utf8")}${late("close", "result", "second answer", T0 + 2)}\n${late("note", "text", "late note", T0 + 3)}\n`);
+    // When reading; then the first result stands, no late note is kept, and both late lines are named.
+    const read = log.read();
+    expect(read.items.map((i) => [i.result, i.closedAt, i.notes])).toEqual([["first answer", new Date(T0 + 1).toISOString(), []]]);
+    expect(read.problems).toEqual([
+      `${log.path}:3: worklog item ${item.id} was already closed; close ignored`,
+      `${log.path}:4: worklog item ${item.id} was already closed; note ignored`,
+    ]);
+  } finally { state.done(); }
 });
 
 test("CLI next, close and list --open read back across processes; a missing flag fails", async () => {
