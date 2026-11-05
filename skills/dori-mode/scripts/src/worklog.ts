@@ -46,6 +46,32 @@ const parseEvent = (value: unknown): Event => {
   return record as Event;
 };
 
+// Every record is JSON.stringify of an event built op first, so it starts with this.
+const RECORD_START = '{"op":"';
+/** A line that does not parse but begins like a record is a write cut off halfway: harmless, and skipped quietly. */
+const isTorn = (line: string): boolean => line.startsWith(RECORD_START) || RECORD_START.startsWith(line);
+
+const ownedOrAbsent = (path: string): boolean =>
+  !existsSync(path) || readFileSync(path, "utf8").split("\n", 1)[0] === WORKLOG_MARKER;
+
+/**
+ * Write a rendered worklog.md through a temp file and rename, so a reader never sees half a file. The marker is checked
+ * again right before the rename: a file someone wrote meanwhile is kept, and this publish is skipped (returns false).
+ * beforeCheck runs between the temp write and that check.
+ */
+export const publishWorklog = (path: string, markdown: string, beforeCheck: () => void = () => {}): boolean => {
+  const tmp = `${path}.${process.pid}.${randomUUID()}.tmp`;
+  try {
+    writeFileSync(tmp, markdown, { encoding: "utf8", mode: 0o600 });
+    beforeCheck();
+    if (!ownedOrAbsent(path)) return false;
+    renameSync(tmp, path);
+    return true;
+  } finally {
+    rmSync(tmp, { force: true });
+  }
+};
+
 /**
  * The lead's list of owner requests. worklog.jsonl is the record: one O_APPEND write per change, so concurrent
  * writers never lose each other's lines. worklog.md is rendered from it after every change for the lead to read.
@@ -101,8 +127,16 @@ export class Worklog {
     const problems: string[] = [];
     for (const [index, line] of text.split("\n").entries()) {
       if (!line.trim()) continue;
+      let value: unknown;
       try {
-        const event = parseEvent(JSON.parse(line));
+        value = JSON.parse(line);
+      } catch (error) {
+        if (!(error instanceof SyntaxError)) throw error;
+        if (!isTorn(line)) problems.push(`${this.path}:${index + 1}: ${error.message}`);
+        continue;
+      }
+      try {
+        const event = parseEvent(value);
         const item = items.get(event.id);
         if (event.op === "add") {
           if (item) throw new WorklogError(`worklog item ${event.id} was already added`);
@@ -110,13 +144,15 @@ export class Worklog {
           continue;
         }
         if (!item) throw new WorklogError(`worklog item ${event.id} was never added`);
-        // Two writers can both see the item open and append; the first close wins and anything after it is flagged.
+        // Two writers can both see the item open and append. The first close wins; a second close is the same race's
+        // normal result and is a no-op, while a next or note after the close is flagged.
+        if (item.closedAt !== undefined && event.op === "close") continue;
         if (item.closedAt !== undefined) throw new WorklogError(`worklog item ${event.id} was already closed; ${event.op} ignored`);
         if (event.op === "next") items.set(event.id, { ...item, next: event.text });
         else if (event.op === "note") items.set(event.id, { ...item, notes: [...item.notes, { at: event.at, text: event.text }] });
         else items.set(event.id, { ...item, closedAt: event.at, result: event.result });
       } catch (error) {
-        if (!(error instanceof SyntaxError || error instanceof WorklogError)) throw error;
+        if (!(error instanceof WorklogError)) throw error;
         problems.push(`${this.path}:${index + 1}: ${error.message}`);
       }
     }
@@ -144,21 +180,13 @@ export class Worklog {
   }
 
   private ensureOwnedMarkdown(): void {
-    if (!existsSync(this.markdownPath)) return;
-    const first = readFileSync(this.markdownPath, "utf8").split("\n", 1)[0];
-    if (first !== WORKLOG_MARKER) throw new WorklogError(`${this.markdownPath} was not written by dori worklog; move it aside before using the command`);
+    if (!ownedOrAbsent(this.markdownPath)) throw new WorklogError(`${this.markdownPath} was not written by dori worklog; move it aside before using the command`);
   }
 
-  /** Rewrite worklog.md from the whole record: temp file + rename, so a reader never sees half a file. */
+  /** Rewrite worklog.md from the whole record. */
   private render(): WorklogRead {
     const text = renderUntilStable(() => readFileSync(this.path), (record) => {
-      const tmp = `${this.markdownPath}.${process.pid}.${randomUUID()}.tmp`;
-      try {
-        writeFileSync(tmp, renderWorklog(this.fold(record).items), { encoding: "utf8", mode: 0o600 });
-        renameSync(tmp, this.markdownPath);
-      } finally {
-        rmSync(tmp, { force: true });
-      }
+      publishWorklog(this.markdownPath, renderWorklog(this.fold(record).items));
     }, () => statSync(this.path).size);
     return this.fold(text);
   }

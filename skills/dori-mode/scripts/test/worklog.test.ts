@@ -1,9 +1,9 @@
 import { expect, test } from "bun:test";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { run } from "../src/run.ts";
-import { renderUntilStable, Worklog, WORKLOG_MARKER, WorklogError } from "../src/worklog.ts";
+import { publishWorklog, renderUntilStable, Worklog, WORKLOG_MARKER, WorklogError } from "../src/worklog.ts";
 import { withState } from "./fakes.ts";
 
 const cli = join(import.meta.dir, "../src/cli.ts");
@@ -82,6 +82,25 @@ test("a worklog.md the command did not write is never replaced, and the record i
     expect(() => log.add("New request", "slack:D1/2.1", T0)).toThrow("was not written by dori worklog; move it aside");
     expect(readFileSync(log.markdownPath, "utf8")).toBe("# My notes\n- keep me\n");
     expect(existsSync(log.path)).toBe(false);
+  } finally { state.done(); }
+});
+
+test("a hand-written worklog.md that appears between the ownership check and the rename is kept", () => {
+  // Given a worklog.md we rendered, and someone who replaces it while our next publish is in flight.
+  const state = withState();
+  try {
+    const log = new Worklog(state.dir);
+    log.add("First", "slack:D1/2.2", T0);
+    const files = () => readdirSync(state.dir).sort();
+    const before = files();
+    // When the publish runs; then it is skipped, the hand-written file is intact, and no temp file is left.
+    expect(publishWorklog(log.markdownPath, `${WORKLOG_MARKER}\nnewer view\n`, () => writeFileSync(log.markdownPath, "# My notes\n"))).toBe(false);
+    expect(readFileSync(log.markdownPath, "utf8")).toBe("# My notes\n");
+    expect(files()).toEqual(before);
+    // And with no one in the way, the same publish replaces our own file.
+    writeFileSync(log.markdownPath, `${WORKLOG_MARKER}\nold view\n`);
+    expect(publishWorklog(log.markdownPath, `${WORKLOG_MARKER}\nnewer view\n`)).toBe(true);
+    expect(readFileSync(log.markdownPath, "utf8")).toBe(`${WORKLOG_MARKER}\nnewer view\n`);
   } finally { state.done(); }
 });
 
@@ -167,7 +186,7 @@ test("C1 controls, NEL and the Unicode line and paragraph separators are refused
   } finally { state.done(); }
 });
 
-test("when two writers close one item, the first close wins and the second, and any change after it, is flagged", () => {
+test("when two writers close one item, the first close wins, the second is a no-op, and a note after it is flagged", () => {
   // Given an item closed once, then a second close and a note appended by writers that saw it still open.
   const state = withState();
   try {
@@ -176,13 +195,10 @@ test("when two writers close one item, the first close wins and the second, and 
     log.close(item.id, "first answer", T0 + 1);
     const late = (op: string, field: string, text: string, at: number) => JSON.stringify({ op, id: item.id, at: new Date(at).toISOString(), [field]: text });
     writeFileSync(log.path, `${readFileSync(log.path, "utf8")}${late("close", "result", "second answer", T0 + 2)}\n${late("note", "text", "late note", T0 + 3)}\n`);
-    // When reading; then the first result stands, no late note is kept, and both late lines are named.
+    // When reading; then the first result stands, the second close is dropped quietly, and the late note is named.
     const read = log.read();
     expect(read.items.map((i) => [i.result, i.closedAt, i.notes])).toEqual([["first answer", new Date(T0 + 1).toISOString(), []]]);
-    expect(read.problems).toEqual([
-      `${log.path}:3: worklog item ${item.id} was already closed; close ignored`,
-      `${log.path}:4: worklog item ${item.id} was already closed; note ignored`,
-    ]);
+    expect(read.problems).toEqual([`${log.path}:4: worklog item ${item.id} was already closed; note ignored`]);
   } finally { state.done(); }
 });
 
@@ -206,19 +222,23 @@ test("CLI next, close and list --open read back across processes; a missing flag
   } finally { state.done(); }
 });
 
-test("a torn last line stays one damaged line; the next record starts fresh and list warns", async () => {
+test("a torn line is skipped quietly, mid-record or last; the next record starts fresh; a line that is no record is named", async () => {
   // Given a record cut off mid-write after one good item.
   const state = withState();
   try {
     const log = new Worklog(state.dir);
     const kept = log.add("Kept", "slack:D1/4.1", T0);
     writeFileSync(log.path, `${readFileSync(log.path, "utf8")}{"op":"add","id":"aaaa`);
-    // When another item is added and the CLI lists.
+    // When another item is added, the record ends in a fresh tear, and the CLI lists.
     const added = log.add("After the tear", "slack:D1/4.2", T0 + 1);
+    writeFileSync(log.path, `${readFileSync(log.path, "utf8")}{"op":"clo`);
     const listed = await cliIn(state.dir)("worklog", "list");
-    // Then both whole items survive and the torn line is named on stderr.
-    expect(log.read().items.map((item) => item.id)).toEqual([kept.id, added.id]);
-    expect(listed.code).toBe(0);
-    expect(listed.err).toContain(`WORKLOG_WARNING ${log.path}:2: `);
+    // Then both whole items survive and neither tear is a warning.
+    expect(log.read()).toMatchObject({ items: [{ id: kept.id }, { id: added.id }], problems: [] });
+    expect([listed.code, listed.err]).toEqual([0, ""]);
+    // And a line that does not begin like a record is still named.
+    writeFileSync(log.path, `${readFileSync(log.path, "utf8")}\n["not", "a record"\n`);
+    expect(log.read().problems).toHaveLength(1);
+    expect((await cliIn(state.dir)("worklog", "list")).err).toContain(`WORKLOG_WARNING ${log.path}:5: `);
   } finally { state.done(); }
 });
