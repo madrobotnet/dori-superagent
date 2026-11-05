@@ -134,3 +134,30 @@ test("CLI add --global from a registered lane's pane is refused; from the lead's
     expect(new Lessons(state.dir).read().lessons.map((l) => [l.lane, l.rule])).toEqual([["lead", "From no pane"], ["lead", "From the lead pane"]]);
   } finally { state.done(); }
 });
+
+test("CLI mark of a global lesson from a registered lane's pane is refused; a repo lesson stays markable there", async () => {
+  // Given a working lane on pane w9:p3, a global lesson the lead retired, and a repo lesson.
+  const state = withState();
+  try {
+    const config = join(state.dir, "config.json");
+    writeFileSync(config, JSON.stringify({ stateDir: state.dir, defaultCwd: state.dir, hooks: {} }));
+    await new Registry(state.dir).write({
+      key: "qa-lane", title: "QA", thread: "none", brief: "/brief.md", done: "/done.md", cwd: state.dir, pane: "w9:p3", openedAt: new Date(T0).toISOString(),
+    });
+    const journal = new Lessons(state.dir);
+    const global = journal.add({ lane: "lead", scope: "global", rule: "Retired rule", evidence: "slack:D1/6.1" }, T0);
+    journal.mark(global.id, "no-effect");
+    const repo = journal.add({ lane: "qa-lane", cwd: state.dir, rule: "Loop flaky UI tests 50 times", evidence: "/tmp/evidence" }, T0);
+    const mark = (pane: string[], id: string) => run(["env", ...pane, `DORI_CONFIG=${config}`, `DORI_STATE_DIR=${state.dir}`, process.execPath, cli,
+      "lesson", "mark", id, "--outcome", "helped"]);
+    const before = readFileSync(journal.path, "utf8");
+    // When the lane's pane marks the global lesson helped; then it is refused, naming the lane, and nothing is written.
+    const refused = await mark(["HERDR_PANE_ID=w9:p3"], global.id);
+    expect([refused.code, refused.err.trim()]).toEqual([1, "a global lesson is the lead's to mark; this pane is lane qa-lane"]);
+    expect(readFileSync(journal.path, "utf8")).toBe(before);
+    // And the same pane can mark the repo lesson; the lead's pane can mark the global one.
+    expect((await mark(["HERDR_PANE_ID=w9:p3"], repo.id)).code).toBe(0);
+    expect((await mark(["HERDR_PANE_ID=w1:p1"], global.id)).code).toBe(0);
+    expect(new Lessons(state.dir).read().lessons.map((l) => [l.rule, l.outcome]).sort()).toEqual([["Loop flaky UI tests 50 times", "helped"], ["Retired rule", "helped"]]);
+  } finally { state.done(); }
+});

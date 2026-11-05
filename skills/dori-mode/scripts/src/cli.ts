@@ -184,17 +184,23 @@ try {
     }
     case "lesson": {
       const lessons = new Lessons(config.stateDir);
+      // The open lane that owns $HERDR_PANE_ID, found the way claim-done finds its lane. This is a convenience check:
+      // it stops a lane from adding or reviving a global lesson by accident or on routine instruction. It is not a
+      // security boundary, since it reads only $HERDR_PANE_ID (env -u gets past it) and a direct write to
+      // lessons.jsonl skips the CLI.
+      const paneLane = async () => {
+        const pane = process.env.HERDR_PANE_ID;
+        return pane ? await deps.registry.byPane(pane) : null;
+      };
       switch (key) {
         case "add": {
           const laneKey = flags.positionals[1];
           if (flags.values.global) {
-            // A global lesson reaches every future brief, so only the lead writes one: a lane may be working from
-            // untrusted input. It takes no lane key, is refused from a registered lane's pane (found the way claim-done
-            // finds its lane), and is recorded as the lead's.
+            // A global lesson reaches every future brief, so it is the lead's: it takes no lane key and is recorded
+            // as the lead's. paneLane() refuses it from a registered lane's pane.
             if (laneKey !== undefined) die("a --global lesson is the lead's: give no lane key");
             if (opt("cwd") !== undefined) die("a --global lesson has no --cwd");
-            const pane = process.env.HERDR_PANE_ID;
-            const caller = pane ? await deps.registry.byPane(pane) : null;
+            const caller = await paneLane();
             if (caller) die(`a --global lesson is the lead's; this pane is lane ${caller.key}`);
             console.log(JSON.stringify(lessons.add({ lane: "lead", scope: "global", rule: need("rule"), evidence: need("evidence") }, realClock.now())));
             break;
@@ -215,6 +221,12 @@ try {
         }
         case "mark": {
           const id = flags.positionals[1] ?? die("lesson mark needs a lesson id");
+          // Marking a global lesson helped or pending puts it back into every brief, so a lane cannot mark one.
+          // Repo lessons stay markable from lanes.
+          if (lessons.read().lessons.find((lesson) => lesson.id === id)?.scope === "global") {
+            const caller = await paneLane();
+            if (caller) die(`a global lesson is the lead's to mark; this pane is lane ${caller.key}`);
+          }
           const outcome = need("outcome");
           if (isLessonOutcome(outcome)) console.log(JSON.stringify(lessons.mark(id, outcome)));
           else die("--outcome must be pending, helped, no-effect, harmful or encoded");
