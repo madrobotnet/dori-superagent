@@ -186,7 +186,7 @@ test("C1 controls, NEL and the Unicode line and paragraph separators are refused
   } finally { state.done(); }
 });
 
-test("when two writers close one item, the first close wins, the second is a no-op, and a note after it is flagged", () => {
+test("when two writers close one item, the first close wins, the second is a no-op, and a note after it is a warning", async () => {
   // Given an item closed once, then a second close and a note appended by writers that saw it still open.
   const state = withState();
   try {
@@ -195,10 +195,14 @@ test("when two writers close one item, the first close wins, the second is a no-
     log.close(item.id, "first answer", T0 + 1);
     const late = (op: string, field: string, text: string, at: number) => JSON.stringify({ op, id: item.id, at: new Date(at).toISOString(), [field]: text });
     writeFileSync(log.path, `${readFileSync(log.path, "utf8")}${late("close", "result", "second answer", T0 + 2)}\n${late("note", "text", "late note", T0 + 3)}\n`);
-    // When reading; then the first result stands, the second close is dropped quietly, and the late note is named.
+    // When reading; then the first result stands, the second close is dropped quietly, and the late note is a warning.
     const read = log.read();
     expect(read.items.map((i) => [i.result, i.closedAt, i.notes])).toEqual([["first answer", new Date(T0 + 1).toISOString(), []]]);
-    expect(read.problems).toEqual([`${log.path}:4: worklog item ${item.id} was already closed; note ignored`]);
+    expect(read.problems).toEqual([]);
+    expect(read.warnings).toEqual([`${log.path}:4: worklog item ${item.id} was already closed; note ignored`]);
+    // And list still names it.
+    const listed = await cliIn(state.dir)("worklog", "list");
+    expect([listed.code, listed.err.trim()]).toEqual([0, `WORKLOG_WARNING ${log.path}:4: worklog item ${item.id} was already closed; note ignored`]);
   } finally { state.done(); }
 });
 

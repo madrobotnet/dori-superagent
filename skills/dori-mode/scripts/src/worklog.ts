@@ -17,7 +17,8 @@ type Event =
   | { readonly op: "next"; readonly id: string; readonly at: string; readonly text: string }
   | { readonly op: "note"; readonly id: string; readonly at: string; readonly text: string }
   | { readonly op: "close"; readonly id: string; readonly at: string; readonly result: string };
-export type WorklogRead = { readonly items: WorklogItem[]; readonly problems: string[] };
+/** problems are damage; warnings are the normal results of racing writers that are still worth naming. */
+export type WorklogRead = { readonly items: WorklogItem[]; readonly problems: string[]; readonly warnings: string[] };
 export class WorklogError extends Error {}
 
 /** First line of a worklog.md this module wrote. A file without it is someone's notes and is never replaced. */
@@ -125,6 +126,7 @@ export class Worklog {
   private fold(text: string): WorklogRead {
     const items = new Map<string, WorklogItem>();
     const problems: string[] = [];
+    const warnings: string[] = [];
     for (const [index, line] of text.split("\n").entries()) {
       if (!line.trim()) continue;
       let value: unknown;
@@ -145,9 +147,12 @@ export class Worklog {
         }
         if (!item) throw new WorklogError(`worklog item ${event.id} was never added`);
         // Two writers can both see the item open and append. The first close wins; a second close is the same race's
-        // normal result and is a no-op, while a next or note after the close is flagged.
+        // normal result and is a no-op, and a next or note after the close is ignored and named as a warning.
         if (item.closedAt !== undefined && event.op === "close") continue;
-        if (item.closedAt !== undefined) throw new WorklogError(`worklog item ${event.id} was already closed; ${event.op} ignored`);
+        if (item.closedAt !== undefined) {
+          warnings.push(`${this.path}:${index + 1}: worklog item ${event.id} was already closed; ${event.op} ignored`);
+          continue;
+        }
         if (event.op === "next") items.set(event.id, { ...item, next: event.text });
         else if (event.op === "note") items.set(event.id, { ...item, notes: [...item.notes, { at: event.at, text: event.text }] });
         else items.set(event.id, { ...item, closedAt: event.at, result: event.result });
@@ -156,7 +161,7 @@ export class Worklog {
         problems.push(`${this.path}:${index + 1}: ${error.message}`);
       }
     }
-    return { items: [...items.values()], problems };
+    return { items: [...items.values()], problems, warnings };
   }
 
   private write(event: Event): WorklogItem {

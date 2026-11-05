@@ -236,7 +236,7 @@ try {
           break;
         case "list": {
           const read = worklog.read();
-          for (const problem of read.problems) console.error(`WORKLOG_WARNING ${problem}`);
+          for (const problem of [...read.problems, ...read.warnings]) console.error(`WORKLOG_WARNING ${problem}`);
           console.log(JSON.stringify(flags.values.open ? read.items.filter((item) => item.closedAt === undefined) : read.items, null, 2));
           break;
         }

@@ -227,7 +227,28 @@ test("torn writes and a duplicate close from racing writers keep boot clean and 
       { id: open.id, title: "Still open", source: "slack:D1/100.2", openedAt: new Date(T0 + 3).toISOString(), notes: [] },
     ],
     problems: [],
+    warnings: [],
   });
+});
+
+test("a next and a note that raced a close print as warnings and keep boot clean; the close stands", async () => {
+  // Given a closed item with a next and a note appended after the close by writers that saw it open.
+  const deps = bootDeps(newWorld());
+  const log = deps.worklog;
+  const done = log.add("Answered", "slack:D1/100.1", T0);
+  log.close(done.id, "answered", T0 + 1);
+  const late = (op: string, at: number) => JSON.stringify({ op, id: done.id, at: new Date(at).toISOString(), text: `late ${op}` });
+  writeFileSync(log.path, `${readFileSync(log.path, "utf8")}${late("next", T0 + 2)}\n${late("note", T0 + 3)}\n`);
+  // When boot runs.
+  const result = await bootCheck(deps);
+  // Then both are named as warnings, nothing is damaged, the item stays closed, and the exit is 0.
+  expect(result.lines.filter((line) => line.startsWith("WORKLOG "))).toEqual([
+    "WORKLOG open=0",
+    `WORKLOG warning ${log.path}:3: worklog item ${done.id} was already closed; next ignored`,
+    `WORKLOG warning ${log.path}:4: worklog item ${done.id} was already closed; note ignored`,
+  ]);
+  expect(result.lines.at(-1)).toBe("BOOT checked read-only; nothing restarted, written or stopped");
+  expect(result.exitCode).toBe(0);
 });
 
 test("a worklog source that spells out fields of its own stays one quoted value on its OPEN line", async () => {

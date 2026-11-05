@@ -228,6 +228,8 @@ export const bootCheck = async (deps: BootDeps): Promise<{ exitCode: number; lin
       failed = true;
       lines.push(`WORKLOG damaged ${problem}`);
     }
+    // A next or note that raced a close was ignored; it is worth naming but leaves the record whole.
+    for (const warning of read.warnings) lines.push(`WORKLOG warning ${warning}`);
   } catch {
     failed = true;
     lines.push(`WORKLOG unreadable ${shellQuote(deps.worklog.path)}`);
