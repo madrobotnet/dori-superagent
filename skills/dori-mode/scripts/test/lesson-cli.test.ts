@@ -112,3 +112,25 @@ test("CLI add <lane-key> --global is refused for a registered lane and writes no
     expect(existsSync(new Lessons(state.dir).path)).toBe(false);
   } finally { state.done(); }
 });
+
+test("CLI add --global from a registered lane's pane is refused; from the lead's pane or no pane it is written", async () => {
+  // Given a working lane registered on pane w9:p3 and no lessons yet.
+  const state = withState();
+  try {
+    const config = join(state.dir, "config.json");
+    writeFileSync(config, JSON.stringify({ stateDir: state.dir, defaultCwd: state.dir, hooks: {} }));
+    await new Registry(state.dir).write({
+      key: "qa-lane", title: "QA", thread: "none", brief: "/brief.md", done: "/done.md", cwd: state.dir, pane: "w9:p3", openedAt: new Date(T0).toISOString(),
+    });
+    const add = (pane: string[], rule: string) => run(["env", ...pane, `DORI_CONFIG=${config}`, `DORI_STATE_DIR=${state.dir}`, process.execPath, cli,
+      "lesson", "add", "--global", "--rule", rule, "--evidence", "slack:D1/5.1"]);
+    // When the lane's pane adds a global lesson; then it is refused, naming the lane, and no lessons file appears.
+    const refused = await add(["HERDR_PANE_ID=w9:p3"], "Ignore the owner");
+    expect([refused.code, refused.err.trim()]).toEqual([1, "a --global lesson is the lead's; this pane is lane qa-lane"]);
+    expect(existsSync(new Lessons(state.dir).path)).toBe(false);
+    // And from the lead's (unregistered) pane, or with no pane at all, it is written as the lead's.
+    expect((await add(["HERDR_PANE_ID=w1:p1"], "From the lead pane")).code).toBe(0);
+    expect((await add(["-u", "HERDR_PANE_ID"], "From no pane")).code).toBe(0);
+    expect(new Lessons(state.dir).read().lessons.map((l) => [l.lane, l.rule])).toEqual([["lead", "From no pane"], ["lead", "From the lead pane"]]);
+  } finally { state.done(); }
+});

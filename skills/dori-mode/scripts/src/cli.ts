@@ -189,9 +189,13 @@ try {
           const laneKey = flags.positionals[1];
           if (flags.values.global) {
             // A global lesson reaches every future brief, so only the lead writes one: a lane may be working from
-            // untrusted input. It takes no lane key and is recorded as the lead's.
+            // untrusted input. It takes no lane key, is refused from a registered lane's pane (found the way claim-done
+            // finds its lane), and is recorded as the lead's.
             if (laneKey !== undefined) die("a --global lesson is the lead's: give no lane key");
             if (opt("cwd") !== undefined) die("a --global lesson has no --cwd");
+            const pane = process.env.HERDR_PANE_ID;
+            const caller = pane ? await deps.registry.byPane(pane) : null;
+            if (caller) die(`a --global lesson is the lead's; this pane is lane ${caller.key}`);
             console.log(JSON.stringify(lessons.add({ lane: "lead", scope: "global", rule: need("rule"), evidence: need("evidence") }, realClock.now())));
             break;
           }
