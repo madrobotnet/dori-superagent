@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { readFileSync, writeFileSync } from "node:fs";
 
-import { LessonError, Lessons, renderLessons } from "../src/lessons.ts";
+import { GLOBAL_LESSON_CAP, LessonError, Lessons, renderLessons, REPO_LESSON_CAP } from "../src/lessons.ts";
 import { withState } from "./fakes.ts";
 
 const T0 = Date.parse("2026-10-29T00:00:00Z");
@@ -139,17 +139,21 @@ test("a malformed or unknown field is rejected by name, and an immutable change 
   ]);
 });
 
-test("a global lesson reaches every repo and shares the eight-line cap; retired ones drop out", () => {
-  // Given a global rule, a retired global rule, and more repo lessons than the cap, all newer than the global rule.
-  const global = lessons.add({ lane: "lead", scope: "global", rule: "Clean up heavy job data right away", evidence: "slack:D1/1.1" }, T0);
-  lessons.mark(lessons.add({ lane: "lead", scope: "global", rule: "Retired rule", evidence: "slack:D1/1.2" }, T0 + 1).id, "harmful");
-  const repo = Array.from({ length: 8 }, (_, i) => lessons.add({ ...input, rule: `Rule ${i}` }, T0 + 10 + i));
+test("global and repo lessons have their own caps, so globals never push repo lessons out; retired ones drop out", () => {
+  // Given more global rules than their cap (one retired), then more repo lessons than theirs, all newer than the globals.
+  const globals = Array.from({ length: GLOBAL_LESSON_CAP + 1 }, (_, i) =>
+    lessons.add({ lane: "lead", scope: "global", rule: i ? `Global ${i}` : "Clean up heavy job data right away", evidence: `slack:D1/1.${i + 1}` }, T0 + i));
+  lessons.mark(lessons.add({ lane: "lead", scope: "global", rule: "Retired rule", evidence: "slack:D1/1.9" }, T0 + 9).id, "harmful");
+  const repo = Array.from({ length: REPO_LESSON_CAP + 2 }, (_, i) => lessons.add({ ...input, rule: `Rule ${i}` }, T0 + 10 + i));
   // When selecting for this repo and for an unrelated one.
   const here = lessons.forRepo("/repo").lessons;
   const elsewhere = lessons.forRepo("/unrelated").lessons;
-  // Then the cap keeps the eight newest of both kinds, and the global rule alone reaches the other repo.
-  expect(here.map((lesson) => lesson.id)).toEqual(repo.slice().reverse().map((lesson) => lesson.id));
-  expect(elsewhere.map((lesson) => lesson.id)).toEqual([global.id]);
+  // Then each kind keeps its own newest (4 global, 8 repo), and only the globals reach the other repo.
+  const newestGlobals = globals.slice(-GLOBAL_LESSON_CAP).reverse().map((lesson) => lesson.id);
+  expect(here.map((lesson) => lesson.id)).toEqual([...newestGlobals, ...repo.slice(-REPO_LESSON_CAP).reverse().map((lesson) => lesson.id)]);
+  expect(elsewhere.map((lesson) => lesson.id)).toEqual(newestGlobals);
+  const global = globals[0];
+  if (!global) throw new Error("no global lesson added");
   expect(global).toEqual({ id: global.id, at: new Date(T0).toISOString(), lane: "lead", scope: "global", rule: "Clean up heavy job data right away", evidence: "slack:D1/1.1", outcome: "pending" });
   expect("cwd" in global).toBe(false);
 });

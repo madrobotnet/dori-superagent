@@ -47,8 +47,8 @@ const USAGE = `dori <command> [options]
   claim-done [<key>] --evidence TEXT  key defaults to the lane registered for $HERDR_PANE_ID
   object-done <key> --reason TEXT [--reason TEXT ...]
   lesson add <key> --rule TEXT --evidence PATH [--cwd DIR]
-  lesson add [<key>] --global --rule TEXT --evidence REF
-                                       a lesson for every lane, whatever its repo
+  lesson add --global --rule TEXT --evidence REF
+                                       the lead's lesson for every lane, whatever its repo
   lesson list [--cwd DIR]             show current lessons (global ones included), newest first
   lesson mark <id> --outcome pending|helped|no-effect|harmful|encoded
   close  <key> [--note TEXT] [--lesson TEXT] [--evidence PATH]
@@ -187,13 +187,15 @@ try {
       switch (key) {
         case "add": {
           const laneKey = flags.positionals[1];
-          const target = laneKey === undefined ? undefined : await deps.registry.read(laneKey) ?? die(`no registered lane "${laneKey}"`);
           if (flags.values.global) {
-            // A rule the lead keeps for every lane needs no lane; it is recorded as the lead's.
+            // A global lesson reaches every future brief, so only the lead writes one: a lane may be working from
+            // untrusted input. It takes no lane key and is recorded as the lead's.
+            if (laneKey !== undefined) die("a --global lesson is the lead's: give no lane key");
             if (opt("cwd") !== undefined) die("a --global lesson has no --cwd");
-            console.log(JSON.stringify(lessons.add({ lane: target?.key ?? "lead", scope: "global", rule: need("rule"), evidence: need("evidence") }, realClock.now())));
+            console.log(JSON.stringify(lessons.add({ lane: "lead", scope: "global", rule: need("rule"), evidence: need("evidence") }, realClock.now())));
             break;
           }
+          const target = laneKey === undefined ? undefined : await deps.registry.read(laneKey) ?? die(`no registered lane "${laneKey}"`);
           const repoLane = target ?? die("lesson add needs a lane key, or --global");
           console.log(JSON.stringify(lessons.add({
             lane: repoLane.key, cwd: opt("cwd") ?? repoLane.cwd ?? config.defaultCwd,

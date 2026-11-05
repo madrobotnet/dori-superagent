@@ -26,6 +26,9 @@ export const isLessonOutcome = (value: unknown): value is LessonOutcome =>
 const singleLine = (value: unknown, max: number): value is string =>
   typeof value === "string" && value.trim().length > 0 && value.length <= max && !/[\x00-\x1f\x7f]/.test(value);
 
+export const REPO_LESSON_CAP = 8;
+export const GLOBAL_LESSON_CAP = 4;
+
 const FIELDS = ["id", "at", "lane", "cwd", "scope", "rule", "evidence", "outcome"] as const;
 const IMMUTABLE = ["at", "lane", "cwd", "scope", "rule", "evidence"] as const;
 const fieldChecks: Record<(typeof FIELDS)[number], [(value: unknown) => boolean, string]> = {
@@ -112,10 +115,16 @@ export class Lessons {
     return updated;
   }
 
-  /** The lessons a new lane in cwd gets: global and repo lessons together, newest first, at most 8. */
+  /**
+   * The lessons a new lane in cwd gets, newest first: at most GLOBAL_LESSON_CAP global ones, then at most
+   * REPO_LESSON_CAP for the repo. Each kind has its own cap, so global rules never push repo lessons out of a brief.
+   */
   forRepo(cwd: string): LessonRead {
     const { lessons, problems } = this.read(cwd);
-    return { lessons: lessons.filter((lesson) => lesson.outcome === "pending" || lesson.outcome === "helped").slice(0, 8), problems };
+    const current = lessons.filter((lesson) => lesson.outcome === "pending" || lesson.outcome === "helped");
+    const global = current.filter((lesson) => lesson.scope === "global").slice(0, GLOBAL_LESSON_CAP);
+    const repo = current.filter((lesson) => lesson.scope !== "global").slice(0, REPO_LESSON_CAP);
+    return { lessons: [...global, ...repo], problems };
   }
 
   private append(lesson: Lesson): void {
