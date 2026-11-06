@@ -100,6 +100,35 @@ test("a pull blocked by a local commit lists that commit and how to go on", () =
   expect(r.err).toContain("DORI_NO_PULL=1");
 });
 
+test("DORI_NO_PULL=true and DORI_NO_PULL=yes skip the pull like DORI_NO_PULL=1; DORI_NO_PULL=0 still pulls", () => {
+  // Given an installed checkout and a newer upstream commit.
+  const { upstream, src, upstreamCommit, install } = setup();
+  const before = git(src, "rev-parse", "HEAD");
+  upstreamCommit("v2\n");
+  // When install.sh runs with each truthy spelling; then the checkout stays at its commit.
+  for (const value of ["true", "yes"]) {
+    expect(install({ DORI_NO_PULL: value }).code).toBe(0);
+    expect(git(src, "rev-parse", "HEAD")).toBe(before);
+  }
+  // And with 0 it pulls as usual.
+  expect(install({ DORI_NO_PULL: "0" }).code).toBe(0);
+  expect(git(src, "rev-parse", "HEAD")).toBe(git(upstream, "rev-parse", "HEAD"));
+});
+
+test("a branch with no upstream is not taken for local work: git's reason, no reset suggested", () => {
+  // Given a checkout with a local edit whose branch tracks nothing.
+  const { src, cli, install } = setup();
+  writeFileSync(join(src, cli), "patched\n");
+  git(src, "branch", "--unset-upstream");
+  // When install.sh runs again.
+  const r = install();
+  // Then it fails, says git's message is the reason, and never tells the user to reset their work away.
+  expect(r.code).toBe(1);
+  expect(r.err).toContain("git's message above says why");
+  expect(r.err).not.toContain("reset --hard");
+  expect(readFileSync(join(src, cli), "utf8")).toBe("patched\n");
+});
+
 test("a failed fetch is not taken for local work: no reset is suggested", () => {
   // Given a checkout with a local edit whose upstream cannot be reached.
   const { root, src, cli, install } = setup();

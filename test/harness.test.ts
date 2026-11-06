@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { writeFileSync } from "node:fs";
+import { existsSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { main } from "../src/cli.ts";
 import { done, dutyTick, mergeGate, ready, Refusal, report, review, send, startLane } from "../src/harness.ts";
@@ -24,6 +24,18 @@ describe("lanes", () => {
     expect(await Bun.file(lane.brief).text()).toContain("dori ready fix-login --text");
     expect(lead.received).toEqual([`[START fix-login] lane opened in ${lane.paneId}`]);
     await expect(startLane(d, "fix-login", brief, { workspace: "w1" })).rejects.toThrow(Refusal);
+  });
+
+  test("start refuses the role names lead and duty as lane keys before it writes or opens anything", async () => {
+    const { w, d, lead, brief } = setup();
+    for (const key of ["lead", "duty"]) {
+      await expect(startLane(d, key, brief, { workspace: "w1" })).rejects.toThrow(`lane key "${key}" is reserved for the ${key} role`);
+      expect(d.store.lane(key)).toBeUndefined();
+      expect(existsSync(d.store.briefPath(key))).toBe(false);
+    }
+    expect(w.calls).toEqual([]);
+    expect(lead.received).toEqual([]);
+    expect(d.store.roles().lead).toBe("w1:p1");
   });
 
   test("ready requires evidence, then reaches the lead; done closes only a ready lane", async () => {
@@ -139,9 +151,10 @@ describe("duty loop", () => {
     d.store.enqueue("w1:p9", { at: w.clock, from: "cli", text: "to broken" });
     d.store.enqueue("w1:p1", { at: w.clock, from: "cli", text: "to lead" });
     const events = await dutyTick(d);
-    expect(events).toContainEqual({ pane: "w1:p9", action: "flush-failed", detail: expect.stringContaining("herdr exploded") });
+    expect(events).toContainEqual({ pane: "w1:p9", action: "delivery-ambiguous", detail: expect.stringContaining("herdr exploded") });
     expect(events).toContainEqual({ pane: "w1:p1", action: "flushed" });
-    expect(lead.received).toEqual(["to lead"]);
+    expect(lead.received).toHaveLength(1);
+    expect(lead.received[0]).toContain("to lead");
     expect(broken.received).toEqual([]);
   });
 
@@ -163,15 +176,15 @@ describe("duty loop", () => {
     expect(w.panes.get(fine.paneId)!.received.at(-1)).toContain("idle for 10 minutes");
   });
 
-  test("a LOST notice whose lead delivery failed once still reaches the lead on the next tick, exactly once", async () => {
+  test("a LOST notice whose Enter failed once still reaches the lead on the next tick, exactly once", async () => {
     const { w, d, lead, brief } = setup();
     const gone = await startLane(d, "gone-lane", brief, { workspace: "w1" });
     lead.received.length = 0;
     w.panes.delete(gone.paneId);
-    w.promptFails.set("w1:p1", "lead exploded");
-    expect(await dutyTick(d)).toContainEqual({ lane: "gone-lane", action: "lane-failed", detail: expect.stringContaining("lead exploded") });
-    expect(lead.received).toEqual([]);
-    w.promptFails.delete("w1:p1");
+    w.promptFails.set("w1:p1", '{"error":{"code":"agent_not_ready"}}');
+    w.keyFails = 3;
+    expect(await dutyTick(d)).toContainEqual({ lane: "gone-lane", action: "lane-failed", detail: expect.stringContaining("key press failed") });
+    expect(lead.received.filter((m) => m.includes("[LOST gone-lane]"))).toHaveLength(1);
     const events = await dutyTick(d);
     expect(events).toContainEqual({ pane: "w1:p1", action: "flushed" });
     expect(lead.received.filter((m) => m.includes("[LOST gone-lane]"))).toHaveLength(1);
@@ -179,16 +192,16 @@ describe("duty loop", () => {
     expect(lead.received.filter((m) => m.includes("[LOST gone-lane]"))).toHaveLength(1);
   });
 
-  test("the flush-failed detail is herdr's first output line, never the queued message", async () => {
+  test("the delivery-ambiguous detail is herdr's first output line, never the queued message", async () => {
     const { w, d } = setup();
     w.addPane("w1:p9", "idle");
     w.promptFails.set("w1:p9", "herdr exploded\nsecond line");
     d.store.enqueue("w1:p9", { at: w.clock, from: "cli", text: "SECRET queued message" });
     const events = await dutyTick(d);
-    expect(events).toEqual([{ pane: "w1:p9", action: "flush-failed", detail: "herdr exploded" }]);
+    expect(events).toEqual([{ pane: "w1:p9", action: "delivery-ambiguous", detail: "herdr exploded" }]);
   });
 
-  test("the duty loop prints a flush-failed line with the reason", async () => {
+  test("the duty loop prints a delivery-ambiguous line with the reason", async () => {
     const { w, d } = setup();
     w.addPane("w1:p9", "idle");
     w.promptFails.set("w1:p9", "herdr exploded");
@@ -202,7 +215,7 @@ describe("duty loop", () => {
       console.log = log;
     }
     expect(lines).toHaveLength(1);
-    expect(lines[0]).toStartWith("DUTY w1:p9 flush-failed: ");
+    expect(lines[0]).toStartWith("DUTY w1:p9 delivery-ambiguous: ");
     expect(lines[0]).toContain("herdr exploded");
   });
 

@@ -3,6 +3,12 @@ import { join } from "node:path";
 import type { BudgetLimits } from "./supervision.ts";
 
 export const LANE_KEY = /^[a-z0-9][a-z0-9._-]{1,60}$/;
+/**
+ * `lead` names the lead, never a lane: records the lead writes (lessons with `lane: "lead"`) and lead-only checks tell
+ * the two apart by this key, so launch and adopt refuse it. LANE_KEY stays as it is because those records still carry it,
+ * and keys are lowercase-only, so the exact match is the whole check.
+ */
+export const RESERVED_LANE_KEY = "lead";
 
 export type LaneStatus = "working" | "paused" | "done-claimed" | "verified-done" | "not-done" | "closed";
 export type Claim = { readonly at: string; readonly evidence: string; readonly emitted?: boolean };
@@ -117,7 +123,11 @@ export class Registry {
     return (await this.list()).filter((l) => statusOf(l) !== "closed");
   }
 
+  /**
+   * The open lane in `pane`. A record keyed `lead` (registered before the key was reserved) is never returned, so a
+   * pane lookup cannot mistake the lead for a lane; that record is still read by its key, listed, and closed by hand.
+   */
   async byPane(pane: string): Promise<Lane | null> {
-    return (await this.open()).find((l) => l.pane === pane) ?? null;
+    return (await this.open()).find((l) => l.pane === pane && l.key !== RESERVED_LANE_KEY) ?? null;
   }
 }

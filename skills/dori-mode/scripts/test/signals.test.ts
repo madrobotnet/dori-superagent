@@ -103,3 +103,11 @@ test("checkDone reports every signal, so one passing signal never hides a failin
   const checks = await checkDone('file ok.txt; command ["false"]', run, io);
   expect(checks.map((c) => c.ok)).toEqual([true, false]);
 });
+
+test("a published signal reads npm view --json both as a bare string (npm 11) and as an array (npm 12)", async () => {
+  const npm = (out: string) => async () => ({ code: 0, out, err: "" });
+  expect((await checkSignal("published pkg@1.2.3", npm('"1.2.3"\n'), io)).ok).toBe(true);
+  expect((await checkSignal("published pkg@1.2.3", npm('[\n  "1.2.3"\n]\n'), io)).ok).toBe(true);
+  expect((await checkSignal("published pkg@1.2.3", npm('[\n  "1.2.4"\n]\n'), io)).ok).toBe(false);
+  expect((await checkSignal("published pkg@1.2.3", npm(""), io)).ok).toBe(false);
+});

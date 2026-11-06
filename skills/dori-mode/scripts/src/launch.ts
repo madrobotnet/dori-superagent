@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url";
 import { type DoriConfig, fill } from "./config.ts";
 import type { FlowDeps } from "./done-flow.ts";
 import { readScreen, statusLookup } from "./panes.ts";
-import { LANE_KEY, type Lane } from "./registry.ts";
+import { LANE_KEY, type Lane, RESERVED_LANE_KEY } from "./registry.ts";
 import { iso } from "./run.ts";
 import { Reports } from "./reports.ts";
 import { doneSyntaxErrors } from "./signals.ts";
@@ -35,6 +35,7 @@ const goalShown = (screen: string, marker: string): boolean =>
 
 export const validateLaunch = async (deps: FlowDeps, input: LaunchInput): Promise<void> => {
   if (!LANE_KEY.test(input.key)) throw new LaunchError(`key must match ${LANE_KEY}`);
+  if (input.key === RESERVED_LANE_KEY) throw new LaunchError(`lane key "${RESERVED_LANE_KEY}" is reserved for the lead`);
   if (await deps.registry.read(input.key)) throw new LaunchError(`lane ${input.key} is already registered`);
   const errors = doneSyntaxErrors(input.done);
   if (errors.length) throw new LaunchError(`Done line is not checkable: ${errors.join("; ")}`);
@@ -135,6 +136,7 @@ const startLane = async (deps: FlowDeps, input: LaunchInput, draft: Lane, preamb
   new Reports(deps.config.stateDir).append({ type: "activity", key: lane.key, at: iso(deps.clock), state: "running", text: `lane launched in ${pane}` });
   const prompt = `${deps.config.launchKeywords}. Read and execute the lane brief at ${input.brief} in full. You are the ${input.key} lane; report as the brief's footer says.`;
   await deps.run(["herdr", "pane", "run", pane, fill(deps.config.agentCommand, { model, prompt }).map(quoteForPane).join(" ")]);
+  const started = deps.clock.now();
   await deps.clock.sleep(20_000);
   const screen = await readScreen(deps.run, pane, 40);
   const bad = STARTUP_FAILURE.exec(screen);
@@ -144,7 +146,7 @@ const startLane = async (deps: FlowDeps, input: LaunchInput, draft: Lane, preamb
     const marker = deps.config.goalMarker;
     let shown = screen;
     for (let check = 0; marker && !goalShown(shown, marker); check++) {
-      if (check === GOAL_CHECKS) return { lane, startup: `STARTUP_NO_GOAL ${input.key} ${pane}: the agent is running but shows no goal after ${20 + GOAL_CHECKS * 10} s; last lines: ${lastLines(shown)}` };
+      if (check === GOAL_CHECKS) return { lane, startup: `STARTUP_NO_GOAL ${input.key} ${pane}: the agent is running but shows no goal after ${Math.round((deps.clock.now() - started) / 1000)} s; last lines: ${lastLines(shown)}` };
       await deps.clock.sleep(10_000);
       shown = await readScreen(deps.run, pane, 40);
       // The goal is only good news while the agent is still running: re-check the status on every re-read.

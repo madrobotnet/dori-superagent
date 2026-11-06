@@ -2,7 +2,7 @@
 # Installs the dori-mode skill and the `dori` CLI.
 # Usage: curl -fsSL https://raw.githubusercontent.com/sisyphuslabs/dori-superagent/main/install.sh | bash
 # Needs: git, bun 1.3+. Optional env: DORI_SRC (clone dir), SKILLS_DIR (where your agent loads skills),
-# DORI_NO_PULL=1 (install an existing checkout as it is, without pulling).
+# DORI_NO_PULL=1 (or true, yes: install an existing checkout as it is, without pulling).
 set -euo pipefail
 
 repo="https://github.com/sisyphuslabs/dori-superagent.git"
@@ -14,8 +14,8 @@ command -v git >/dev/null || { echo "git is required" >&2; exit 1; }
 
 if [ ! -d "$src/.git" ]; then
   git clone --quiet --depth 1 "$repo" "$src"
-elif [ "${DORI_NO_PULL:-}" = 1 ]; then
-  echo "DORI_NO_PULL=1: installing $src as it is, without pulling" >&2
+elif [[ "${DORI_NO_PULL:-}" =~ ^(1|true|yes)$ ]]; then
+  echo "DORI_NO_PULL=$DORI_NO_PULL: installing $src as it is, without pulling" >&2
 elif ! git -C "$src" fetch --quiet; then
   echo "Could not fetch updates for $src; git's message above says why." >&2
   exit 1

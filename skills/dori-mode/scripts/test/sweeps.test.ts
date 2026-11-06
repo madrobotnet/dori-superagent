@@ -165,6 +165,24 @@ test("launch reports STARTUP_OK only on a ready agent status that shows a goal; 
   expect(await run("done", "❯ ", "done-lane")).toStartWith("STARTUP_UNCONFIRMED done-lane w:p9");
 });
 
+test("STARTUP_NO_GOAL names the time the launch really waited, not the planned 80 s", async () => {
+  // Given a host where every sleep overruns by 5 s, and an agent that never shows a goal.
+  const brief = join(state.dir, "brief.md");
+  writeFileSync(brief, "# brief\n");
+  world.screen = "❯ ";
+  const clock = fakeClock(T0);
+  const base = depsFor(world, { ...clock, sleep: async (ms: number) => void (clock.at += ms + 5_000) }, state.dir);
+  const inner = base.run;
+  const deps = { ...base, run: async (argv: readonly string[]) => {
+    if (argv[0] === "herdr" && argv[1] === "tab" && argv[2] === "create") return { code: 0, out: JSON.stringify({ result: { root_pane: { pane_id: "w:p9" }, tab_id: "w:t9" } }), err: "" };
+    if (argv[0] === "herdr" && argv[1] === "pane" && argv[2] === "list") return { code: 0, out: JSON.stringify({ result: { panes: [{ pane_id: "w:p9", workspace_id: "w", agent: "pi", agent_status: "idle" }] } }), err: "" };
+    return inner(argv);
+  } };
+  // When the launch gives up on the goal; then the message gives the 20 s check plus six 10 s re-reads, each 5 s late.
+  const { startup } = await launchLane(deps, { key: "late-lane", title: "t", brief, done: "closed acme/app#3" });
+  expect(startup).toStartWith("STARTUP_NO_GOAL late-lane w:p9: the agent is running but shows no goal after 115 s;");
+});
+
 test("launch registers the lane before it starts the agent, so the lane's first dori report is accepted", async () => {
   const brief = join(state.dir, "brief.md");
   writeFileSync(brief, "# brief\n");

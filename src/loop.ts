@@ -4,7 +4,7 @@
 import { appendFileSync, copyFileSync, existsSync, linkSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { createHash, randomUUID } from "node:crypto";
 import { resolve } from "node:path";
-import { KEY_RE, Refusal, startLane, tellLead, type Deps } from "./harness.ts";
+import { KEY_RE, Refusal, reservedKey, startLane, tellLead, type Deps } from "./harness.ts";
 import type { Item, Lane, LoopRun } from "./store.ts";
 
 export const HOUR = 3_600_000;
@@ -32,6 +32,8 @@ export function backlogAdd(
   opts: { title?: string; priority?: number; cwd?: string; decision?: string; source?: string } = {},
 ): Item {
   if (!KEY_RE.test(id)) throw new Refusal(`item id must match ${KEY_RE} (it becomes the lane key)`);
+  const reserved = reservedKey(id);
+  if (reserved) throw new Refusal(reserved);
   const priority = opts.priority ?? 5;
   if (!Number.isInteger(priority) || priority < 1 || priority > 9) throw new Refusal("--priority must be 1 (first) to 9 (last)");
   if (!existsSync(briefFile)) throw new Refusal(`no brief file ${briefFile}`);

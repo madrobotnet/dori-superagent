@@ -82,6 +82,7 @@ Real work runs in its own herdr tab, called a lane. The protocol, with the reaso
 - Secrets, tokens, internal hostnames and personal data never go into a public issue, PR, gist or message.
 - Build memory as you work and consult it before asking the owner something it already answers.
 - Keep going until the work is done. Stop only when nothing can move without the owner.
+- Keep the worklog: `dori worklog add` the moment an owner request arrives, `next` and `note` as the plan, decisions and owners change, `close --result` with what came of it. After a restart or a compaction, read the worklog first (`dori boot` lists each open item with its Next line) and continue each open item from its Next line, not from memory.
 - When the owner says wait, stop or hold on, pause the lane with `dori pause <key>` in the same turn; if they name no lane, pause every working lane on that topic and say which. A reply alone leaves it running: the freshness sweep nudges it and its goal keeps continuing. `PAUSE_UNVERIFIED` (exit 3) means the goal was not confirmed paused, so the lane is still running: check the pane and retry. `dori resume <key>` when they say go.
 
 ## Scripts
@@ -92,12 +93,13 @@ Real work runs in its own herdr tab, called a lane. The protocol, with the reaso
 |---|---|
 | `dori launch` / `dori adopt` | open a lane in a new tab, or register one already running |
 | `dori sync [--write]` | rebuild the registry from live panes, report drift |
-| `dori boot` | after a restart or compaction: vanished panes, lane journals, watches left on finished lanes; read-only |
+| `dori boot` | after a restart or compaction: vanished panes, lane journals, open worklog items, watches left on finished lanes; read-only |
 | `dori report` | a lane records a milestone, blocker, question, halt or done in its `reports.jsonl` and prints the `[REPORT]` line |
 | `dori checkpoint` / `dori checkpoints` | a lane records each completed step and its remote receipts once, and reads them back on resume |
 | `dori verify-pr <owner/repo> <num>` | before a PR is called done: commit emails match the repo's identity, fixes come with a test or a `No test:` reason |
 | `dori claim-done` / `dori object-done` / `dori close` | the done flow |
 | `dori lesson add` / `list` / `mark` | keep what a lane learned about a repo, or with `--global` a standing rule for every lane; `launch` puts the current ones above the next brief |
+| `dori worklog add` / `next` / `note` / `close` / `list` | the lead's record of owner requests, each with its source, next step, notes and result; survives compaction |
 | `dori pause` / `dori resume` | the owner said wait: no nudges, goal paused, running turn stopped; and back |
 | `dori watch` | the 5-minute auto-close watcher (run it as a persistent monitor) |
 | `dori freshness` | nudge silent lanes, post their last report to their thread; block lanes at their wall, token or cost ceiling; flag hung calls |

@@ -46,6 +46,17 @@ test("malformed repoIdentities entries are dropped, so launch still writes its f
   }
 });
 
+test("a goalMarker that is not a string falls back to the default, so a typo never turns the goal check off", async () => {
+  const path = join(state.dir, "config.json");
+  for (const value of [null, false, 0, {}, ["Pursuing goal"]]) {
+    await Bun.write(path, JSON.stringify({ goalMarker: value }));
+    expect((await loadConfig(path, "/home/ana")).goalMarker).toBe("Pursuing goal");
+  }
+  // An empty string is the documented way to turn the check off, so it is kept.
+  await Bun.write(path, JSON.stringify({ goalMarker: "" }));
+  expect((await loadConfig(path, "/home/ana")).goalMarker).toBe("");
+});
+
 test("hook templates fill each argument separately, so text with spaces or quotes stays one argument", () => {
   const argv = fill(["notify", "--thread", "{thread}", "--text", "{text}"], { thread: "chat:1/2", text: `it's "done"; rm -rf /` });
   expect(argv).toEqual(["notify", "--thread", "chat:1/2", "--text", `it's "done"; rm -rf /`]);

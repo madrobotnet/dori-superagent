@@ -127,6 +127,8 @@ export const loadConfig = async (path = configPath(), home = homedir()): Promise
   checkSupervision(raw.supervision);
   const merged: DoriConfig = {
     ...base, ...raw, guard: { ...base.guard, ...raw.guard }, hooks: { ...base.hooks, ...raw.hooks }, repoIdentities: repoIdentities(raw.repoIdentities),
+    // Only a string is a marker: null or false would quietly turn the goal check off, and an object would never show.
+    goalMarker: typeof raw.goalMarker === "string" ? raw.goalMarker : base.goalMarker,
     supervision: { ...base.supervision, ...raw.supervision, defaults: { ...base.supervision.defaults, ...raw.supervision?.defaults } },
   };
   for (const [name, value] of Object.entries({

@@ -20,7 +20,7 @@ import { canLaunch } from "./routing.ts";
 import { fetchHttp, MessengerError, UnsafeMessageError } from "./messenger/http.ts";
 import { Slack } from "./messenger/slack.ts";
 import { pollSlackInbound } from "./messenger/slack-inbound.ts";
-import { fileTgInboundStore, pollTelegramInbound } from "./messenger/telegram-inbound.ts";
+import { envInt, fileTgInboundStore, telegramInboundLoop } from "./messenger/telegram-inbound.ts";
 import { ThreadLedger } from "./messenger/thread-ledger.ts";
 import { slackPresence } from "./messenger/slack-presence.ts";
 import { Telegram } from "./messenger/telegram.ts";
@@ -29,6 +29,7 @@ import { realTimers } from "./messenger/typing.ts";
 import { transcribe, TranscriptionError } from "./messenger/voice.ts";
 import { formatVerifyPr, verifyPr } from "./verify-pr.ts";
 import { CheckpointError, Checkpoints } from "./checkpoints.ts";
+import { Worklog, WorklogError } from "./worklog.ts";
 
 const USAGE = `dori <command> [options]
 
@@ -36,7 +37,7 @@ const USAGE = `dori <command> [options]
          [--wall-minutes N|none] [--token-limit N|none] [--cost-limit N|none] [--activity-path FILE ...] [--dry-run]
   adopt  <key> --pane ID --title T --brief FILE --done "..." [--thread REF]
   sync   [--write]                     registry vs live panes; read-only unless --write
-  boot                                 read-only check after a restart: Slack auth, vanished panes, journals, stale watches
+  boot                                 read-only check after a restart: Slack auth, vanished panes, journals, open worklog items, stale watches
   report <key> --kind milestone|blocker|question|halted|done --text TEXT
                                        append a durable progress report and print its [REPORT] line
   checkpoint <key> --step ID --result TEXT --evidence PATH [--remote-effect RECEIPT]...
@@ -51,6 +52,10 @@ const USAGE = `dori <command> [options]
                                        the lead's lesson for every lane, whatever its repo
   lesson list [--cwd DIR]             show current lessons (global ones included), newest first
   lesson mark <id> --outcome pending|helped|no-effect|harmful|encoded
+  worklog add <title> --source REF     record an owner request when it arrives
+  worklog next|note <id> <text>        set the item's next step, or add a note (a decision, an owner)
+  worklog close <id> --result TEXT     close the item with what came of it
+  worklog list [--open]                items as JSON; <stateDir>/worklog.md holds the same for reading
   close  <key> [--note TEXT] [--lesson TEXT] [--evidence PATH]
                                        close now (Done signals must read back live); an optional lesson never blocks it
   pause  <key> [--note TEXT]           the owner said wait: goal paused (read back), running turn stopped, no nudges; exit 3 if unconfirmed
@@ -65,7 +70,7 @@ const USAGE = `dori <command> [options]
                                        post or edit a message (tokens from DORI_SLACK_TOKEN, DORI_TELEGRAM_TOKEN, DORI_DISCORD_TOKEN)
   presence <slack|discord>             keep the account shown as online until stopped
   transcribe <audio-file>              run hooks.transcribe and print the text
-  inbound slack|telegram [--loop MIN]  print INBOUND lines: Slack unread thread replies / Telegram owner DMs + configured topic
+  inbound slack|telegram [--loop MIN]  print INBOUND lines: Slack unread thread replies / Telegram owner DMs, edits and media + configured topic
                                        the Dori posted in (any helper), DMs and channels with unread mentions`;
 
 const die = (message: string, code = 1): never => {
@@ -91,6 +96,7 @@ const flags = parseArgs({
     "activity-path": { type: "string", multiple: true },
     rule: { type: "string" }, outcome: { type: "string" }, lesson: { type: "string" }, "dry-run": { type: "boolean" },
     global: { type: "boolean" },
+    source: { type: "string" }, open: { type: "boolean" },
   },
 });
 const opt = (name: string): string | undefined => {
@@ -176,6 +182,7 @@ try {
       const r = await bootCheck({
         ...deps,
         reports: new Reports(config.stateDir),
+        worklog: new Worklog(config.stateDir),
         slack: slackAuthCheck(slack),
         monitorDirs: sessionDirs.flatMap((dir) => (dir ? [join(dir, "extensions", "terminal")] : [])),
       });
@@ -234,6 +241,35 @@ try {
         }
         default:
           die("lesson needs add, list or mark");
+      }
+      break;
+    }
+    case "worklog": {
+      const worklog = new Worklog(config.stateDir);
+      const id = () => flags.positionals[1] ?? die(`worklog ${key} needs an item id`);
+      const text = () => flags.positionals.slice(2).join(" ").trim() || die(`worklog ${key} needs text`);
+      const now = realClock.now();
+      switch (key) {
+        case "add":
+          console.log(JSON.stringify(worklog.add(flags.positionals.slice(1).join(" ").trim() || die("worklog add needs a title"), need("source"), now)));
+          break;
+        case "next":
+          console.log(JSON.stringify(worklog.next(id(), text(), now)));
+          break;
+        case "note":
+          console.log(JSON.stringify(worklog.note(id(), text(), now)));
+          break;
+        case "close":
+          console.log(JSON.stringify(worklog.close(id(), need("result"), now)));
+          break;
+        case "list": {
+          const read = worklog.read();
+          for (const problem of [...read.problems, ...read.warnings]) console.error(`WORKLOG_WARNING ${problem}`);
+          console.log(JSON.stringify(flags.values.open ? read.items.filter((item) => item.closedAt === undefined) : read.items, null, 2));
+          break;
+        }
+        default:
+          die("worklog needs add, next, note, close or list");
       }
       break;
     }
@@ -385,20 +421,29 @@ try {
         const tg = new Telegram(fetchHttp, realClock, process.env.DORI_TELEGRAM_TOKEN ?? die("DORI_TELEGRAM_TOKEN is not set"));
         const store = fileTgInboundStore(`${config.stateDir}/telegram-offset`);
         const num = (name: string): number => {
-          const raw = process.env[name] ?? die(`${name} is not set`);
-          const n = Number(raw);
-          if (!Number.isSafeInteger(n)) die(`${name} must be an integer, got: ${raw}`);
-          return n;
+          try {
+            return envInt(name, process.env[name]);
+          } catch (e) {
+            return die(e instanceof Error ? e.message : String(e));
+          }
         };
         const ownerId = num("DORI_TELEGRAM_OWNER_ID");
         const groupChatId = process.env.DORI_TELEGRAM_GROUP_ID === undefined ? undefined : num("DORI_TELEGRAM_GROUP_ID");
         const topicId = process.env.DORI_TELEGRAM_TOPIC_ID === undefined ? undefined : num("DORI_TELEGRAM_TOPIC_ID");
         console.log(`INBOUND_READY telegram owner=${ownerId} group=${groupChatId ?? "-"} topic=${topicId ?? "-"}`);
-        await every(loopMin, async () => {
-          // Full text, JSON-escaped on one line: getUpdates cannot fetch a message twice.
-          await pollTelegramInbound(tg, store, { ownerId, groupChatId, topicId }, (i) =>
-            console.log(`INBOUND ${i.source} ${i.chat} ${i.thread ?? "-"} ${i.updateId} ${i.from} ${JSON.stringify(i.text ?? "")}`));
-        });
+        // Full text, JSON-escaped on one line: getUpdates cannot fetch a message twice.
+        await telegramInboundLoop(
+          tg,
+          store,
+          { ownerId, groupChatId, topicId },
+          loopMin,
+          (i) =>
+            console.log(
+              `INBOUND ${i.kind === "edit" ? "edit:" : ""}${i.source} ${i.chat} ${i.thread ?? "-"} ${i.updateId} ${i.from} ${JSON.stringify(i.text ?? "")}` +
+                (i.media === undefined ? "" : ` file=${i.media.kind}:${i.media.fileId}`),
+            ),
+          (m) => console.log(`WARN ${m}`.slice(0, 300)),
+        );
         break;
       }
       if (key !== "slack") die("inbound supports slack or telegram");
@@ -420,6 +465,6 @@ try {
       process.exit(command ? 1 : 0);
   }
 } catch (e) {
-  if (e instanceof LaunchError || e instanceof UnsafeMessageError || e instanceof MessengerError || e instanceof TranscriptionError || e instanceof ReportError || e instanceof CheckpointError || e instanceof LessonError) die(e.message);
+  if (e instanceof LaunchError || e instanceof UnsafeMessageError || e instanceof MessengerError || e instanceof TranscriptionError || e instanceof ReportError || e instanceof CheckpointError || e instanceof LessonError || e instanceof WorklogError) die(e.message);
   throw e;
 }

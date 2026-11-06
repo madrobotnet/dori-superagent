@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import { readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { main } from "../src/cli.ts";
 import { done, dutyTick, memFreePct, ready, Refusal, report, startLane } from "../src/harness.ts";
 import { backlogAdd, backlogDecide, backlogDrop, backlogImport, HOUR, importId, loopTick, msUntilNext, restore } from "../src/loop.ts";
 import type { Exec } from "../src/herdr.ts";
@@ -24,6 +25,11 @@ describe("backlog", () => {
   test("add validates, copies the brief, and decide/drop change what the loop may start", async () => {
     const { d, brief, add } = setup();
     expect(() => backlogAdd(d, "Bad Id", brief)).toThrow(Refusal);
+    for (const id of ["lead", "duty"]) {
+      expect(() => backlogAdd(d, id, brief)).toThrow(`lane key "${id}" is reserved for the ${id} role`);
+      expect(d.store.item(id)).toBeUndefined();
+      expect(existsSync(d.store.itemBrief(id))).toBe(false);
+    }
     expect(() => backlogAdd(d, "ok-id", brief, { priority: 0 })).toThrow("--priority");
     expect(() => backlogAdd(d, "ok-id", brief, { priority: 10 })).toThrow("--priority");
     expect(() => backlogAdd(d, "ok-id", join(d.store.root, "missing.md"))).toThrow("no brief");
@@ -398,5 +404,27 @@ describe("hardening", () => {
     await tick();
     await tick();
     expect(d.store.runs()).toHaveLength(2);
+  });
+
+  test("loop status says armed with the age of the last run, never that a process is running", async () => {
+    const { w, d, tick } = setup();
+    const status = async (): Promise<string> => {
+      const lines: string[] = [];
+      const log = console.log;
+      console.log = (...a: unknown[]) => void lines.push(a.join(" "));
+      try {
+        expect(await main(["loop", "status"], d)).toBe(0);
+      } finally {
+        console.log = log;
+      }
+      return lines[0]!;
+    };
+
+    expect(await status()).toBe("armed (no stop file; no run recorded yet)");
+    await tick();
+    w.clock += 10 * 60_000;
+    expect(await status()).toBe("armed (no stop file; last run 10m ago)");
+    d.store.setStop(d.now(), "maintenance");
+    expect(await status()).toBe("stopped: maintenance");
   });
 });

@@ -27,6 +27,14 @@ export const UNREADABLE = [
 
 export class SignalSyntaxError extends Error {}
 
+const publishedVersions = (out: string): unknown[] => {
+  try {
+    return [JSON.parse(out)].flat();
+  } catch {
+    return [];
+  }
+};
+
 const readJson = (s: string, i: number): { readonly value: unknown; readonly end: number } => {
   const open = s[i];
   let end = i;
@@ -189,7 +197,8 @@ export const checkSignal = async (signal: string, run: Runner, io: SignalIo = {}
     }
     case "published": {
       const r = await run(["npm", "view", `${sig.pkg}@${sig.version}`, "version", "--json"]);
-      const ok = r.code === 0 && r.out.replace(/"/g, "").trim() === sig.version;
+      // npm 12 prints `version --json` as an array, older npm as a bare string.
+      const ok = r.code === 0 && publishedVersions(r.out).includes(sig.version);
       return { signal: s, ok, detail: ok ? `registry has ${sig.pkg}@${sig.version}` : r.err || r.out || "not published" };
     }
     case "command": {
